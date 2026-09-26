@@ -159,21 +159,25 @@ const AutoBoundsFitter = ({ points }) => {
   return null;
 };
 
-// Reset to India Overview Control
-const IndiaViewButton = () => {
+// Reset to India Overview Control (Must be child of MapContainer to use useMap)
+const IndiaViewControl = () => {
   const map = useMap();
   return (
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        map.flyTo([20.5937, 78.9629], 5, { duration: 1.2 });
-      }}
-      className="flex items-center gap-2 px-3 py-2 bg-zinc-950/95 hover:bg-zinc-900 text-zinc-100 border border-zinc-700/80 rounded-xl text-xs font-bold shadow-2xl backdrop-blur-md transition-all hover:scale-105 active:scale-95 cursor-pointer z-[1000]"
-      title="Reset View to India Overview"
-    >
-      <Compass className="w-4 h-4 text-amber-400" />
-      <span>India View</span>
-    </button>
+    <div className="leaflet-top leaflet-left !mt-14 !ml-3 pointer-events-auto" style={{ zIndex: 1000 }}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          map.flyTo([20.5937, 78.9629], 5, { duration: 1.2 });
+        }}
+        className="flex items-center gap-2 px-3 py-2 bg-zinc-950/95 hover:bg-zinc-900 text-zinc-100 border border-zinc-700/80 rounded-xl text-xs font-bold shadow-2xl backdrop-blur-md transition-all hover:scale-105 active:scale-95 cursor-pointer"
+        title="Reset View to India Overview"
+      >
+        <Compass className="w-4 h-4 text-amber-400" />
+        <span>India View</span>
+      </button>
+    </div>
   );
 };
 
@@ -240,6 +244,9 @@ const MapComponent = ({
 
         {/* Dynamic Bounds Fitting */}
         <AutoBoundsFitter points={boundsPoints} />
+
+        {/* Floating Quick Reset Control */}
+        <IndiaViewControl />
 
         {/* Map Click Handler */}
         <MapClickHandler
@@ -422,11 +429,6 @@ const MapComponent = ({
           </>
         )}
       </MapContainer>
-
-      {/* Floating Controls Overlay: India View Button (Top Left) */}
-      <div className="absolute top-4 left-4 z-[1000] pointer-events-auto">
-        <IndiaViewButton />
-      </div>
 
       {/* Clicked Map Location Pinpoint Action Card */}
       {clickedLocation && (
