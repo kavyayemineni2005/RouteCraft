@@ -34,7 +34,10 @@ export const updateProfileApi = (data) => API.put('/auth/profile', data);
 
 // Route & Pitstop Services
 export const geocodeApi = (query) => API.post('/route/geocode', { query });
-export const calculateRouteApi = (points) => API.post('/route/calculate', { points });
+export const searchSuggestionsApi = (query) => API.get('/route/autocomplete', { params: { query } });
+export const reverseGeocodeApi = (latitude, longitude) => API.post('/route/reverse', { latitude, longitude });
+export const calculateRouteApi = (points, vehicleType = 'car', travelersCount = 1) =>
+  API.post('/route/calculate', { points, vehicleType, travelersCount });
 export const discoverPitstopsApi = (data) => API.post('/route/pitstops', data);
 export const calculateDetourApi = (data) => API.post('/route/detour', data);
 

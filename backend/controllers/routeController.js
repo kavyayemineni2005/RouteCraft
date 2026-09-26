@@ -1,4 +1,4 @@
-const { geocodeLocation } = require('../services/geocodingService');
+const { geocodeLocation, searchSuggestions, reverseGeocode } = require('../services/geocodingService');
 const { calculateRoute, calculateHaversineDistance } = require('../services/routingService');
 const { discoverPitstops } = require('../services/pitstopService');
 
@@ -20,12 +20,48 @@ const geocode = async (req, res) => {
   }
 };
 
-// @desc    Calculate driving route across ordered waypoints
+// @desc    Search location suggestions for autocomplete
+// @route   GET /api/route/autocomplete or POST /api/route/autocomplete
+// @access  Public
+const autocomplete = async (req, res) => {
+  try {
+    const query = req.query.query || req.body.query;
+    if (!query || query.trim().length < 2) {
+      return res.json([]);
+    }
+
+    const suggestions = await searchSuggestions(query);
+    res.json(suggestions);
+  } catch (error) {
+    console.error('[RouteController.autocomplete] Error:', error.message);
+    res.json([]);
+  }
+};
+
+// @desc    Reverse geocode coordinates to location address/name
+// @route   POST /api/route/reverse
+// @access  Public
+const reverse = async (req, res) => {
+  try {
+    const { latitude, longitude } = req.body;
+    if (latitude === undefined || longitude === undefined) {
+      return res.status(400).json({ message: 'Latitude and longitude are required.' });
+    }
+
+    const location = await reverseGeocode(latitude, longitude);
+    res.json(location);
+  } catch (error) {
+    console.error('[RouteController.reverse] Error:', error.message);
+    res.status(400).json({ message: error.message || 'Failed to reverse geocode coordinate.' });
+  }
+};
+
+// @desc    Calculate route across ordered waypoints for various travel modes
 // @route   POST /api/route/calculate
 // @access  Public
 const calculate = async (req, res) => {
   try {
-    const { points } = req.body;
+    const { points, vehicleType, travelersCount } = req.body;
 
     if (!points || !Array.isArray(points) || points.length < 2) {
       return res.status(400).json({
@@ -33,7 +69,11 @@ const calculate = async (req, res) => {
       });
     }
 
-    const routeData = await calculateRoute(points);
+    const routeData = await calculateRoute(
+      points,
+      vehicleType || 'car',
+      Number(travelersCount) || 1
+    );
     res.json(routeData);
   } catch (error) {
     console.error('[RouteController.calculate] Error:', error.message);
@@ -82,14 +122,14 @@ const getPitstops = async (req, res) => {
 // @access  Public
 const calculateDetour = async (req, res) => {
   try {
-    const { startPoint, pitstop, destPoint, mainRouteDurationMinutes } = req.body;
+    const { startPoint, pitstop, destPoint, mainRouteDurationMinutes, vehicleType, travelersCount } = req.body;
 
     if (!startPoint || !pitstop || !destPoint) {
       return res.status(400).json({ message: 'startPoint, pitstop, and destPoint are required.' });
     }
 
     const pointsVia = [startPoint, pitstop, destPoint];
-    const routeVia = await calculateRoute(pointsVia);
+    const routeVia = await calculateRoute(pointsVia, vehicleType || 'car', travelersCount || 1);
 
     const baseDuration = Number(mainRouteDurationMinutes) || 0;
     const detourMinutes = Math.max(0, routeVia.duration - baseDuration);
@@ -98,6 +138,7 @@ const calculateDetour = async (req, res) => {
       detourMinutes,
       routeWithPitstopDuration: routeVia.duration,
       additionalDistanceKm: routeVia.distance,
+      vehicleType: vehicleType || 'car',
     });
   } catch (error) {
     console.error('[RouteController.detour] Error:', error.message);
@@ -107,7 +148,10 @@ const calculateDetour = async (req, res) => {
 
 module.exports = {
   geocode,
+  autocomplete,
+  reverse,
   calculate,
   getPitstops,
   calculateDetour,
 };
+

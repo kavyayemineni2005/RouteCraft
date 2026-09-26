@@ -24,6 +24,7 @@ const TimeBudget = ({
   availableTime = 480, // in minutes
   drivingTime = 0,     // in minutes
   stops = [],          // array of selected stops
+  vehicleType = 'car', // 'car' | 'bike'
 }) => {
   // Calculate total pitstop duration: sum of (stopDurationMinutes + detourMinutes)
   const pitstopTime = stops.reduce((acc, stop) => {
@@ -44,16 +45,19 @@ const TimeBudget = ({
   const remainingPercent = Math.max(0, 100 - usedPercent);
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl backdrop-blur-sm transition-all">
+    <div className="bg-zinc-950/90 border border-zinc-800 rounded-2xl p-5 shadow-xl backdrop-blur-sm transition-all">
       {/* Header & Status */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-400">
+          <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
             <Clock className="w-5 h-5" />
           </div>
           <div>
             <h3 className="text-base font-bold text-white tracking-wide flex items-center gap-2">
               TIME BUDGET
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-200 border border-zinc-700 flex items-center gap-1">
+                {vehicleType === 'bike' ? '🏍️ Bike' : '🚗 Car'}
+              </span>
               {isOverBudget ? (
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30">
                   Over Budget
@@ -64,21 +68,21 @@ const TimeBudget = ({
                 </span>
               )}
             </h3>
-            <p className="text-xs text-slate-400">
-              Total Budget: <strong className="text-slate-200">{formatDuration(availableTime)}</strong>
+            <p className="text-xs text-zinc-400">
+              Total Budget: <strong className="text-zinc-200">{formatDuration(availableTime)}</strong>
             </p>
           </div>
         </div>
 
         {/* Dynamic Used vs Remaining Display */}
-        <div className="flex items-center gap-4 text-sm bg-slate-950/60 px-3.5 py-1.5 rounded-xl border border-slate-800">
+        <div className="flex items-center gap-4 text-sm bg-black px-3.5 py-1.5 rounded-xl border border-zinc-800">
           <div>
-            <span className="text-xs text-slate-400 block">Used Time</span>
-            <span className="font-bold text-slate-100">{formatDuration(totalUsedTime)}</span>
+            <span className="text-xs text-zinc-400 block">Used Time</span>
+            <span className="font-bold text-zinc-100">{formatDuration(totalUsedTime)}</span>
           </div>
-          <div className="w-px h-6 bg-slate-800"></div>
+          <div className="w-px h-6 bg-zinc-800"></div>
           <div>
-            <span className="text-xs text-slate-400 block">
+            <span className="text-xs text-zinc-400 block">
               {isOverBudget ? 'Exceeded By' : 'Remaining'}
             </span>
             <span className={`font-bold ${isOverBudget ? 'text-rose-400' : 'text-emerald-400'}`}>
@@ -90,12 +94,12 @@ const TimeBudget = ({
 
       {/* Visual Multi-Segment Time-Budget Bar */}
       <div className="relative mb-3">
-        <div className="w-full h-4 bg-slate-800/80 rounded-full overflow-hidden flex p-0.5 border border-slate-700/50">
+        <div className="w-full h-4 bg-zinc-900 rounded-full overflow-hidden flex p-0.5 border border-zinc-800">
           {/* Driving Time Segment */}
           {drivingPercent > 0 && (
             <div
               style={{ width: `${drivingPercent}%` }}
-              className="h-full bg-gradient-to-r from-sky-600 to-sky-400 rounded-l-full transition-all duration-500 relative group"
+              className="h-full bg-emerald-500 rounded-l-full transition-all duration-500 relative group"
               title={`Driving: ${formatDuration(drivingTime)}`}
             />
           )}
@@ -104,7 +108,7 @@ const TimeBudget = ({
           {pitstopsPercent > 0 && (
             <div
               style={{ width: `${pitstopsPercent}%` }}
-              className="h-full bg-gradient-to-r from-amber-500 to-orange-400 transition-all duration-500 group"
+              className="h-full bg-amber-500 transition-all duration-500 group"
               title={`Pitstops: ${formatDuration(pitstopTime)}`}
             />
           )}
@@ -121,7 +125,7 @@ const TimeBudget = ({
           {!isOverBudget && remainingPercent > 0 && (
             <div
               style={{ width: `${remainingPercent}%` }}
-              className="h-full bg-emerald-500/20 border-l border-emerald-500/30 rounded-r-full transition-all duration-500"
+              className="h-full bg-zinc-800 border-l border-zinc-700 rounded-r-full transition-all duration-500"
               title={`Remaining: ${formatDuration(remainingTime)}`}
             />
           )}
@@ -129,10 +133,10 @@ const TimeBudget = ({
       </div>
 
       {/* Segment Legends */}
-      <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2 pt-1 border-t border-slate-800/60">
+      <div className="flex flex-wrap items-center justify-between text-xs text-zinc-400 gap-2 pt-1 border-t border-zinc-800/80">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
             <span>Driving ({formatDuration(drivingTime)})</span>
           </div>
 
@@ -142,12 +146,12 @@ const TimeBudget = ({
           </div>
 
           <div className="flex items-center gap-1.5">
-            <span className={`w-2.5 h-2.5 rounded-full ${isOverBudget ? 'bg-rose-500' : 'bg-emerald-400'}`}></span>
+            <span className={`w-2.5 h-2.5 rounded-full ${isOverBudget ? 'bg-rose-500' : 'bg-zinc-600'}`}></span>
             <span>{isOverBudget ? `Over (+${formatDuration(overByMinutes)})` : `Buffer (${formatDuration(remainingTime)})`}</span>
           </div>
         </div>
 
-        <div className="text-slate-400 text-xs">
+        <div className="text-zinc-400 text-xs">
           {stops.length} {stops.length === 1 ? 'pitstop planned' : 'pitstops planned'}
         </div>
       </div>

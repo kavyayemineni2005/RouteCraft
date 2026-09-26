@@ -7,12 +7,12 @@ const connectDB = async () => {
   if (!isPlaceholder) {
     try {
       const conn = await mongoose.connect(uri, {
-        serverSelectionTimeoutMS: 8000,
+        serverSelectionTimeoutMS: 5000,
       });
       console.log(`[MongoDB Atlas] Connected successfully: ${conn.connection.host}`);
       return;
     } catch (err) {
-      console.warn(`[MongoDB Atlas] Connection attempt to Atlas failed (${err.message}). Falling back to in-memory instance for development.`);
+      console.warn(`[MongoDB Atlas] Connection attempt to Atlas failed (${err.message}). Falling back to local/in-memory instance for development.`);
     }
   }
 
@@ -27,7 +27,11 @@ const connectDB = async () => {
       }
 
       if (MongoMemoryServer) {
-        const mongod = await MongoMemoryServer.create();
+        const mongod = await MongoMemoryServer.create({
+          instance: {
+            launchTimeout: 60000,
+          },
+        });
         const memoryUri = mongod.getUri();
         await mongoose.connect(memoryUri);
         console.log(`[MongoDB Dev] Connected to in-memory MongoDB instance at ${memoryUri}`);
@@ -43,8 +47,6 @@ const connectDB = async () => {
   console.error('1. MONGO_URI is added in your Render Environment Variables.');
   console.error('2. MongoDB Atlas Network Access allows connections from anywhere (0.0.0.0/0).');
   console.error('3. The database user credentials and password are correct.');
-  // Do not crash the entire process immediately so health check endpoint still responds
-
 };
 
 module.exports = connectDB;

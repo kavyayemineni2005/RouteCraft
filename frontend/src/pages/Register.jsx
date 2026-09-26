@@ -17,7 +17,6 @@ const Register = () => {
     e.preventDefault();
     if (password.length < 6) {
       setErrorMsg('Password must be at least 6 characters.');
-      return;
     }
 
     setErrorMsg('');
@@ -34,20 +33,20 @@ const Register = () => {
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md bg-slate-900/90 border border-slate-800 rounded-3xl p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
+    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12 bg-black">
+      <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
         {/* Glow ambient background */}
-        <div className="absolute -top-10 -left-10 w-48 h-48 bg-indigo-500/10 blur-2xl rounded-full pointer-events-none"></div>
+        <div className="absolute -top-10 -left-10 w-48 h-48 bg-amber-500/10 blur-2xl rounded-full pointer-events-none"></div>
 
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white mx-auto mb-3 shadow-lg shadow-sky-500/20">
-            <Compass className="w-7 h-7" />
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-300 flex items-center justify-center text-black mx-auto mb-3 shadow-lg shadow-orange-500/30 border border-amber-300/40 font-bold">
+            <Compass className="w-7 h-7 stroke-[2.5]" />
           </div>
           <h2 className="text-2xl font-extrabold text-white tracking-tight">
             Create Your Account
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-zinc-400 mt-1">
             Join RouteCraft to save itineraries, bookmark pitstops, and review places
           </p>
         </div>
@@ -63,52 +62,52 @@ const Register = () => {
         {/* Register Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
               Full Name
             </label>
             <div className="relative">
-              <User className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <User className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Alex Sharma"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500 transition-colors"
+                className="w-full bg-black border border-zinc-800 rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
               Email Address
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Mail className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500 transition-colors"
+                className="w-full bg-black border border-zinc-800 rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
               Password
             </label>
             <div className="relative">
-              <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Minimum 6 characters"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500 transition-colors"
+                className="w-full bg-black border border-zinc-800 rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
               />
             </div>
           </div>
@@ -116,10 +115,10 @@ const Register = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-sky-600/30 flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-2"
+            className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-2"
           >
             {loading ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
             ) : (
               <>
                 <UserPlus className="w-4 h-4" />
@@ -129,10 +128,10 @@ const Register = () => {
           </button>
         </form>
 
-        <div className="mt-5 pt-5 border-t border-slate-800 text-center">
-          <p className="text-xs text-slate-400">
+        <div className="mt-5 pt-5 border-t border-zinc-800 text-center">
+          <p className="text-xs text-zinc-400">
             Already have an account?{' '}
-            <Link to="/login" className="text-sky-400 hover:text-sky-300 font-semibold underline">
+            <Link to="/login" className="text-emerald-400 hover:text-emerald-300 font-semibold underline">
               Sign In
             </Link>
           </p>

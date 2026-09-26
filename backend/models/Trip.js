@@ -29,6 +29,10 @@ const stopSchema = new mongoose.Schema({
     type: Number,
     default: 30,
   },
+  estimatedCost: {
+    type: Number,
+    default: 0, // Individual stop cost in ₹ (food/entry/parking)
+  },
   description: {
     type: String,
     default: '',
@@ -56,28 +60,50 @@ const tripSchema = new mongoose.Schema(
       trim: true,
     },
     start: {
-      name: { type: String, required: true },
-      latitude: { type: Number, required: true },
-      longitude: { type: Number, required: true },
+      name: { type: String, default: '' },
+      latitude: { type: Number, default: 0 },
+      longitude: { type: Number, default: 0 },
+    },
+    startLocation: {
+      name: { type: String, default: '' },
+      latitude: { type: Number, default: 0 },
+      longitude: { type: Number, default: 0 },
     },
     destination: {
-      name: { type: String, required: true },
-      latitude: { type: Number, required: true },
-      longitude: { type: Number, required: true },
+      name: { type: String, default: '' },
+      latitude: { type: Number, default: 0 },
+      longitude: { type: Number, default: 0 },
+    },
+    endLocation: {
+      name: { type: String, default: '' },
+      latitude: { type: Number, default: 0 },
+      longitude: { type: Number, default: 0 },
     },
     availableTime: {
       type: Number, // in minutes
-      required: true,
+      default: 480,
+    },
+    availableTimeBudgetMinutes: {
+      type: Number, // in minutes
+      default: 480,
     },
     maxDetour: {
       type: Number, // in minutes
-      required: true,
+      default: 30,
     },
     distance: {
       type: Number, // in km
       default: 0,
     },
+    totalDistanceKm: {
+      type: Number, // in km
+      default: 0,
+    },
     travelTime: {
+      type: Number, // driving time in minutes
+      default: 0,
+    },
+    totalDurationMinutes: {
       type: Number, // driving time in minutes
       default: 0,
     },
@@ -88,6 +114,52 @@ const tripSchema = new mongoose.Schema(
     preferredCategories: {
       type: [String],
       default: [],
+    },
+    vehicleType: {
+      type: String,
+      enum: ['car', 'bike', 'bus', 'train', 'flight'],
+      default: 'car',
+    },
+    travelersCount: {
+      type: Number,
+      default: 1,
+    },
+    // Trip Expense Financial Budget (in INR ₹)
+    totalBudget: {
+      type: Number,
+      default: 5000,
+    },
+    fuelCost: {
+      type: Number,
+      default: 0,
+    },
+    foodCost: {
+      type: Number,
+      default: 0,
+    },
+    parkingTollCost: {
+      type: Number,
+      default: 0,
+    },
+    activityCost: {
+      type: Number,
+      default: 0,
+    },
+    otherCost: {
+      type: Number,
+      default: 0,
+    },
+    estimatedTotal: {
+      type: Number,
+      default: 0,
+    },
+    remainingBudget: {
+      type: Number,
+      default: 5000,
+    },
+    notes: {
+      type: String,
+      default: '',
     },
     stops: [stopSchema],
     routeCoordinates: {

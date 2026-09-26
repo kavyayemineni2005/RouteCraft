@@ -8,8 +8,10 @@ import ProtectedRoute from './components/ProtectedRoute';
 
 import Home from './pages/Home';
 import Planner from './pages/Planner';
+import CreateTrip from './pages/CreateTrip';
 import Trips from './pages/Trips';
 import Dashboard from './pages/Dashboard';
+import Profile from './pages/Profile';
 import Login from './pages/Login';
 import Register from './pages/Register';
 
@@ -17,7 +19,7 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-sky-500 selection:text-white">
+        <div className="min-h-screen flex flex-col bg-black text-zinc-100 selection:bg-amber-500 selection:text-black">
           {/* Main Top Navigation */}
           <Navbar />
 
@@ -25,6 +27,8 @@ function App() {
           <main className="flex-1">
             <Routes>
               <Route path="/" element={<Home />} />
+              <Route path="/create" element={<CreateTrip />} />
+              <Route path="/create-trip" element={<CreateTrip />} />
               <Route path="/planner" element={<Planner />} />
               
               {/* Protected User Routes */}
@@ -41,6 +45,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <Profile />
                   </ProtectedRoute>
                 }
               />

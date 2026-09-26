@@ -3,14 +3,20 @@
 
 @layer base {
   :root {
-    --primary: #0284c7;
-    --primary-focus: #0369a1;
+    --primary: #10b981;
+    --primary-focus: #059669;
     --accent: #f59e0b;
-    --bg-dark: #0f172a;
+    --accent-orange: #f97316;
+    --bg-dark: #000000;
+    --card-bg: #09090b;
   }
 
   body {
-    @apply bg-slate-950 text-slate-100 antialiased font-sans min-h-screen selection:bg-sky-500 selection:text-white;
+    background-color: #000000;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(245, 158, 11, 0.05) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
+    @apply text-zinc-100 antialiased font-sans min-h-screen selection:bg-amber-500 selection:text-black;
   }
 }
 
@@ -19,21 +25,21 @@
   width: 100%;
   height: 100%;
   border-radius: 0.75rem;
-  background-color: #0f172a !important;
+  background-color: #000000 !important;
   font-family: inherit;
   z-index: 10;
 }
 
 .leaflet-popup-content-wrapper {
-  background: #1e293b !important;
-  color: #f1f5f9 !important;
+  background: #09090b !important;
+  color: #f4f4f5 !important;
   border-radius: 0.75rem !important;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.8), 0 8px 10px -6px rgba(0, 0, 0, 0.6) !important;
+  border: 1px solid rgba(245, 158, 11, 0.25) !important;
 }
 
 .leaflet-popup-tip {
-  background: #1e293b !important;
+  background: #09090b !important;
 }
 
 .leaflet-popup-content {
@@ -47,14 +53,14 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
+  background: #000000;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #27272a;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #3f3f46;
 }
 
 /* Pulsing badge animation */
@@ -66,3 +72,5 @@
 .animate-pulse-subtle {
   animation: pulse-subtle 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+

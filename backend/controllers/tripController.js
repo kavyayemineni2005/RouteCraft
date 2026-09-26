@@ -8,32 +8,75 @@ const createTrip = async (req, res) => {
     const {
       title,
       start,
+      startLocation,
       destination,
+      endLocation,
       availableTime,
+      availableTimeBudgetMinutes,
       maxDetour,
       distance,
+      totalDistanceKm,
       travelTime,
+      totalDurationMinutes,
       totalTripTime,
       preferredCategories,
+      vehicleType,
+      totalBudget,
+      fuelCost,
+      foodCost,
+      parkingTollCost,
+      activityCost,
+      otherCost,
+      estimatedTotal,
+      remainingBudget,
+      notes,
       stops,
       routeCoordinates,
     } = req.body;
 
-    if (!title || !start || !destination || !availableTime) {
-      return res.status(400).json({ message: 'Title, start, destination, and availableTime are required.' });
+    const resolvedTitle = title || req.body.tripName || req.body.name || 'My Road Trip';
+    const resolvedStart = start || startLocation;
+    const resolvedDest = destination || endLocation;
+    const resolvedBudget = availableTime || availableTimeBudgetMinutes || 480;
+    const resolvedDistance = distance || totalDistanceKm || 0;
+    const resolvedTravelTime = travelTime || totalDurationMinutes || 0;
+    const resolvedVehicle = ['car', 'bike', 'bus', 'train', 'flight'].includes(vehicleType) ? vehicleType : 'car';
+    const resolvedTravelers = Number(req.body.travelersCount) >= 1 ? Number(req.body.travelersCount) : 1;
+    const resolvedTotalBudget = Number(totalBudget) >= 0 ? Number(totalBudget) : 5000;
+    const resolvedEstimatedTotal = Number(estimatedTotal) >= 0 ? Number(estimatedTotal) : 0;
+    const resolvedRemaining = Number(remainingBudget) !== undefined ? Number(remainingBudget) : (resolvedTotalBudget - resolvedEstimatedTotal);
+
+    if (!resolvedStart || !resolvedDest) {
+      return res.status(400).json({ message: 'Start location and destination are required.' });
     }
 
     const trip = await Trip.create({
       userId: req.user._id,
-      title,
-      start,
-      destination,
-      availableTime,
-      maxDetour: maxDetour || 15,
-      distance: distance || 0,
-      travelTime: travelTime || 0,
-      totalTripTime: totalTripTime || 0,
+      title: resolvedTitle.trim(),
+      start: resolvedStart,
+      startLocation: resolvedStart,
+      destination: resolvedDest,
+      endLocation: resolvedDest,
+      availableTime: resolvedBudget,
+      availableTimeBudgetMinutes: resolvedBudget,
+      maxDetour: maxDetour || 30,
+      distance: resolvedDistance,
+      totalDistanceKm: resolvedDistance,
+      travelTime: resolvedTravelTime,
+      totalDurationMinutes: resolvedTravelTime,
+      totalTripTime: totalTripTime || resolvedTravelTime,
       preferredCategories: preferredCategories || [],
+      vehicleType: resolvedVehicle,
+      travelersCount: resolvedTravelers,
+      totalBudget: resolvedTotalBudget,
+      fuelCost: Number(fuelCost) || 0,
+      foodCost: Number(foodCost) || 0,
+      parkingTollCost: Number(parkingTollCost) || 0,
+      activityCost: Number(activityCost) || 0,
+      otherCost: Number(otherCost) || 0,
+      estimatedTotal: resolvedEstimatedTotal,
+      remainingBudget: resolvedRemaining,
+      notes: notes || '',
       stops: stops || [],
       routeCoordinates: routeCoordinates || [],
     });

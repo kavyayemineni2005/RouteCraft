@@ -94,16 +94,16 @@ const PlaceModal = ({ place, isOpen, onClose }) => {
   if (!isOpen || !place) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
       <div 
-        className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden relative"
+        className="bg-zinc-950 border border-zinc-800 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden relative"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="p-6 border-b border-slate-800 flex items-start justify-between bg-slate-950/50">
+        <div className="p-6 border-b border-zinc-800 flex items-start justify-between bg-black">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20">
+              <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg bg-zinc-900 text-amber-300 border border-zinc-700">
                 {place.category || 'Pitstop'}
               </span>
               <div className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
@@ -118,7 +118,7 @@ const PlaceModal = ({ place, isOpen, onClose }) => {
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -127,29 +127,29 @@ const PlaceModal = ({ place, isOpen, onClose }) => {
         {/* Scrollable Modal Body */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1">
           {/* Description & Metrics */}
-          <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80">
-            <p className="text-sm text-slate-300 leading-relaxed mb-4">
+          <div className="bg-black p-4 rounded-2xl border border-zinc-800">
+            <p className="text-sm text-zinc-300 leading-relaxed mb-4">
               {place.description || 'A handpicked pitstop ideal for scenic views, refreshment, or local cultural experience along your route.'}
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-              <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
-                <span className="text-slate-400 block mb-0.5">Recommended Stay</span>
-                <strong className="text-slate-200 font-semibold flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-sky-400" />
+              <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800">
+                <span className="text-zinc-400 block mb-0.5">Recommended Stay</span>
+                <strong className="text-zinc-200 font-semibold flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
                   {place.stopDurationMinutes || 30} mins
                 </strong>
               </div>
 
-              <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
-                <span className="text-slate-400 block mb-0.5">Coordinates</span>
-                <strong className="text-slate-200 font-semibold truncate block">
+              <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800">
+                <span className="text-zinc-400 block mb-0.5">Coordinates</span>
+                <strong className="text-zinc-200 font-semibold truncate block">
                   {place.latitude?.toFixed(4)}, {place.longitude?.toFixed(4)}
                 </strong>
               </div>
 
-              <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 col-span-2 sm:col-span-1">
-                <span className="text-slate-400 block mb-0.5">Corridor Route</span>
+              <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800 col-span-2 sm:col-span-1">
+                <span className="text-zinc-400 block mb-0.5">Corridor Route</span>
                 <strong className="text-emerald-400 font-semibold">Verified Safe Stop</strong>
               </div>
             </div>
@@ -159,18 +159,18 @@ const PlaceModal = ({ place, isOpen, onClose }) => {
           <div>
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-base font-bold text-white flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-sky-400" />
+                <MessageSquare className="w-4 h-4 text-emerald-400" />
                 Traveler Reviews ({reviews.length})
               </h4>
             </div>
 
             {loadingReviews ? (
-              <div className="text-center py-6 text-slate-400 text-sm">
-                <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+              <div className="text-center py-6 text-zinc-400 text-sm">
+                <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
                 Loading traveler reviews...
               </div>
             ) : reviews.length === 0 ? (
-              <div className="text-center py-6 px-4 bg-slate-950/40 rounded-2xl border border-dashed border-slate-800 text-slate-400 text-sm">
+              <div className="text-center py-6 px-4 bg-black rounded-2xl border border-dashed border-zinc-800 text-zinc-400 text-sm">
                 No reviews yet. Be the first explorer to leave a review!
               </div>
             ) : (
@@ -178,14 +178,14 @@ const PlaceModal = ({ place, isOpen, onClose }) => {
                 {reviews.map((rev) => (
                   <div 
                     key={rev._id || rev.createdAt} 
-                    className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80"
+                    className="p-3.5 rounded-xl bg-black border border-zinc-800"
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-indigo-600/30 text-indigo-400 border border-indigo-500/40 flex items-center justify-center text-xs font-bold">
+                        <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-xs font-bold">
                           {(rev.userName || rev.user?.name || 'T')[0].toUpperCase()}
                         </div>
-                        <span className="text-xs font-semibold text-slate-200">
+                        <span className="text-xs font-semibold text-zinc-200">
                           {rev.userName || rev.user?.name || 'Road Tripper'}
                         </span>
                       </div>
@@ -194,7 +194,7 @@ const PlaceModal = ({ place, isOpen, onClose }) => {
                         <span>{rev.rating}</span>
                       </div>
                     </div>
-                    <p className="text-xs text-slate-300 pl-8 leading-relaxed">
+                    <p className="text-xs text-zinc-300 pl-8 leading-relaxed">
                       {rev.comment}
                     </p>
                   </div>
@@ -204,7 +204,7 @@ const PlaceModal = ({ place, isOpen, onClose }) => {
           </div>
 
           {/* Write a Review Box */}
-          <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
+          <div className="bg-black p-4 rounded-2xl border border-zinc-800">
             <h5 className="text-sm font-bold text-white mb-2">
               Share Your Experience
             </h5>
@@ -225,7 +225,7 @@ const PlaceModal = ({ place, isOpen, onClose }) => {
             <form onSubmit={handleReviewSubmit} className="space-y-3">
               {/* Star Selector */}
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">Rating:</span>
+                <span className="text-xs text-zinc-400">Rating:</span>
                 <div className="flex items-center gap-1">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
@@ -236,7 +236,7 @@ const PlaceModal = ({ place, isOpen, onClose }) => {
                     >
                       <Star
                         className={`w-5 h-5 ${
-                          star <= newRating ? 'fill-amber-400 text-amber-400' : 'text-slate-600'
+                          star <= newRating ? 'fill-amber-400 text-amber-400' : 'text-zinc-700'
                         }`}
                       />
                     </button>
@@ -252,14 +252,14 @@ const PlaceModal = ({ place, isOpen, onClose }) => {
                 onChange={(e) => setNewComment(e.target.value)}
                 placeholder="How was the view, food quality, or restroom cleanliness?"
                 rows={3}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 transition-colors resize-none"
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition-colors resize-none"
               />
 
               <div className="flex justify-end">
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-lg shadow-sky-600/30 disabled:opacity-50 transition-all"
+                  className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-500/30 disabled:opacity-50 transition-all"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>{submitting ? 'Posting...' : 'Submit Review'}</span>
@@ -270,10 +270,10 @@ const PlaceModal = ({ place, isOpen, onClose }) => {
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex justify-end">
+        <div className="p-4 border-t border-zinc-800 bg-black flex justify-end">
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
+            className="px-5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold transition-colors border border-zinc-800"
           >
             Close
           </button>

@@ -18,9 +18,9 @@ app.use(express.json());
 // API Health Check
 app.get('/api/health', (req, res) => {
   res.json({
-    status: 'online',
+    success: true,
+    message: 'RouteCraft API is running',
     app: 'RouteCraft API',
-    version: '1.0.0',
     timestamp: new Date().toISOString(),
   });
 });
