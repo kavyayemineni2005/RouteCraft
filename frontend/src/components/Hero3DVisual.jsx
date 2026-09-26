@@ -1,309 +1,141 @@
-import React, { useEffect, useRef } from 'react';
-import * as THREE from 'three';
+import React, { useState } from 'react';
+import { 
+  Sparkles, 
+  Navigation, 
+  MapPin, 
+  Clock, 
+  IndianRupee, 
+  ShieldCheck, 
+  Compass,
+  Zap,
+  Coffee,
+  Fuel,
+  Utensils,
+  Eye,
+  Activity
+} from 'lucide-react';
+import heroImage from '../assets/routecraft_hero.jpg';
 
 const Hero3DVisual = () => {
-  const mountRef = useRef(null);
-
-  useEffect(() => {
-    const container = mountRef.current;
-    if (!container) return;
-
-    const width = container.clientWidth || 480;
-    const height = container.clientHeight || 420;
-
-    // 1. Scene & Camera Setup
-    const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x050508, 0.04);
-
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(0, 10, 22);
-    camera.lookAt(0, 0, 0);
-
-    // 2. WebGL Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    container.appendChild(renderer.domElement);
-
-    // 3. Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-    scene.add(ambientLight);
-
-    const mainLight = new THREE.DirectionalLight(0x10b981, 2.5);
-    mainLight.position.set(10, 20, 15);
-    scene.add(mainLight);
-
-    const amberLight = new THREE.PointLight(0xf59e0b, 3, 30);
-    amberLight.position.set(-8, 6, 8);
-    scene.add(amberLight);
-
-    const cyanLight = new THREE.PointLight(0x06b6d4, 3, 30);
-    cyanLight.position.set(8, 4, -5);
-    scene.add(cyanLight);
-
-    // 4. Curved Road Curve & Geometry
-    const curvePoints = [
-      new THREE.Vector3(-10, -1.5, -8),
-      new THREE.Vector3(-6, -0.5, -2),
-      new THREE.Vector3(-2, 0.5, 4),
-      new THREE.Vector3(3, 0, 1),
-      new THREE.Vector3(7, -0.8, -4),
-      new THREE.Vector3(11, -1.2, -7),
-    ];
-    const roadCurve = new THREE.CatmullRomCurve3(curvePoints);
-    roadCurve.curveType = 'centripetal';
-
-    // Road Ribbon
-    const roadGeometry = new THREE.TubeGeometry(roadCurve, 100, 0.9, 12, false);
-    const roadMaterial = new THREE.MeshStandardMaterial({
-      color: 0x18181b,
-      roughness: 0.4,
-      metalness: 0.6,
-    });
-    const roadMesh = new THREE.Mesh(roadGeometry, roadMaterial);
-    scene.add(roadMesh);
-
-    // Glowing Neon Center Line
-    const centerLineGeometry = new THREE.TubeGeometry(roadCurve, 100, 0.08, 8, false);
-    const centerLineMaterial = new THREE.MeshBasicMaterial({
-      color: 0x10b981,
-    });
-    const centerLineMesh = new THREE.Mesh(centerLineGeometry, centerLineMaterial);
-    centerLineMesh.position.y += 0.05;
-    scene.add(centerLineMesh);
-
-    // 5. Stylized Road Trip Vehicle (Car & Glow)
-    const carGroup = new THREE.Group();
-    
-    // Vehicle Body
-    const bodyGeo = new THREE.BoxGeometry(1.2, 0.45, 0.7);
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0xf59e0b,
-      roughness: 0.2,
-      metalness: 0.8,
-    });
-    const carBody = new THREE.Mesh(bodyGeo, bodyMat);
-    carGroup.add(carBody);
-
-    // Vehicle Cabin / Windshield
-    const cabinGeo = new THREE.BoxGeometry(0.65, 0.35, 0.55);
-    const cabinMat = new THREE.MeshStandardMaterial({
-      color: 0x09090b,
-      roughness: 0.1,
-      metalness: 0.9,
-    });
-    const cabin = new THREE.Mesh(cabinGeo, cabinMat);
-    cabin.position.set(-0.05, 0.35, 0);
-    carGroup.add(cabin);
-
-    // Headlights (Cyan/Emerald Glow)
-    const headLightGeo = new THREE.SphereGeometry(0.1, 8, 8);
-    const headLightMat = new THREE.MeshBasicMaterial({ color: 0x34d399 });
-    const hlLeft = new THREE.Mesh(headLightGeo, headLightMat);
-    hlLeft.position.set(0.6, 0.05, 0.25);
-    const hlRight = new THREE.Mesh(headLightGeo, headLightMat);
-    hlRight.position.set(0.6, 0.05, -0.25);
-    carGroup.add(hlLeft, hlRight);
-
-    // Taillights (Vibrant Amber/Red)
-    const tailLightGeo = new THREE.SphereGeometry(0.08, 8, 8);
-    const tailLightMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e });
-    const tlLeft = new THREE.Mesh(tailLightGeo, tailLightMat);
-    tlLeft.position.set(-0.6, 0.05, 0.22);
-    const tlRight = new THREE.Mesh(tailLightGeo, tailLightMat);
-    tlRight.position.set(-0.6, 0.05, -0.22);
-    carGroup.add(tlLeft, tlRight);
-
-    scene.add(carGroup);
-
-    // 6. Floating Waypoint Location Pins
-    const pinGroup = new THREE.Group();
-    const pinPositions = [0.15, 0.45, 0.75, 0.95];
-    const pinColors = [0x10b981, 0xf59e0b, 0x06b6d4, 0xec4899];
-    const pins = [];
-
-    pinPositions.forEach((t, i) => {
-      const pinSubGroup = new THREE.Group();
-      const pt = roadCurve.getPointAt(t);
-
-      // Pin Head (Octahedron crystal)
-      const pinHeadGeo = new THREE.OctahedronGeometry(0.45, 0);
-      const pinHeadMat = new THREE.MeshStandardMaterial({
-        color: pinColors[i],
-        emissive: pinColors[i],
-        emissiveIntensity: 0.6,
-        roughness: 0.1,
-        metalness: 0.8,
-      });
-      const pinHead = new THREE.Mesh(pinHeadGeo, pinHeadMat);
-      pinHead.position.set(0, 1.2, 0);
-      pinSubGroup.add(pinHead);
-
-      // Pin Stalk / Beam
-      const stalkGeo = new THREE.CylinderGeometry(0.02, 0.02, 1.2, 8);
-      const stalkMat = new THREE.MeshBasicMaterial({ color: pinColors[i], transparent: true, opacity: 0.7 });
-      const stalk = new THREE.Mesh(stalkGeo, stalkMat);
-      stalk.position.set(0, 0.6, 0);
-      pinSubGroup.add(stalk);
-
-      // Ground Ripple Ring
-      const ringGeo = new THREE.RingGeometry(0.2, 0.35, 16);
-      const ringMat = new THREE.MeshBasicMaterial({ color: pinColors[i], side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
-      const ring = new THREE.Mesh(ringGeo, ringMat);
-      ring.rotation.x = Math.PI / 2;
-      ring.position.set(0, 0.02, 0);
-      pinSubGroup.add(ring);
-
-      pinSubGroup.position.copy(pt);
-      pinGroup.add(pinSubGroup);
-      pins.push({ group: pinSubGroup, head: pinHead, initialY: pt.y, baseT: t });
-    });
-    scene.add(pinGroup);
-
-    // 7. Futuristic Orbit Compass Rings
-    const compassGroup = new THREE.Group();
-    const outerRingGeo = new THREE.TorusGeometry(8.5, 0.04, 16, 80);
-    const outerRingMat = new THREE.MeshBasicMaterial({ color: 0x3f3f46, transparent: true, opacity: 0.4 });
-    const outerRing = new THREE.Mesh(outerRingGeo, outerRingMat);
-    outerRing.rotation.x = Math.PI / 2.2;
-    compassGroup.add(outerRing);
-
-    const innerRingGeo = new THREE.TorusGeometry(6.5, 0.03, 16, 60);
-    const innerRingMat = new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.3 });
-    const innerRing = new THREE.Mesh(innerRingGeo, innerRingMat);
-    innerRing.rotation.x = Math.PI / 2.4;
-    compassGroup.add(innerRing);
-
-    scene.add(compassGroup);
-
-    // 8. Particle Stars / Waypoint Dust
-    const particleCount = 180;
-    const particleGeo = new THREE.BufferGeometry();
-    const particlePositions = new Float32Array(particleCount * 3);
-
-    for (let i = 0; i < particleCount * 3; i += 3) {
-      particlePositions[i] = (Math.random() - 0.5) * 35;
-      particlePositions[i + 1] = (Math.random() - 0.5) * 20;
-      particlePositions[i + 2] = (Math.random() - 0.5) * 25;
-    }
-    particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-
-    const particleMat = new THREE.PointsMaterial({
-      color: 0x10b981,
-      size: 0.12,
-      transparent: true,
-      opacity: 0.6,
-      blending: THREE.AdditiveBlending,
-    });
-    const particles = new THREE.Points(particleGeo, particleMat);
-    scene.add(particles);
-
-    // 9. Interactive Mouse Parallax
-    let mouseX = 0;
-    let mouseY = 0;
-    let targetX = 0;
-    let targetY = 0;
-
-    const handleMouseMove = (event) => {
-      const rect = container.getBoundingClientRect();
-      const x = event.clientX - rect.left - width / 2;
-      const y = event.clientY - rect.top - height / 2;
-      targetX = (x / width) * 2.5;
-      targetY = (y / height) * 2.5;
-    };
-
-    container.addEventListener('mousemove', handleMouseMove);
-
-    // 10. Animation Loop
-    let carProgress = 0;
-    let animationFrameId;
-    const clock = new THREE.Clock();
-
-    const animate = () => {
-      animationFrameId = requestAnimationFrame(animate);
-      const elapsedTime = clock.getElapsedTime();
-
-      // Smooth mouse lerp
-      mouseX += (targetX - mouseX) * 0.05;
-      mouseY += (targetY - mouseY) * 0.05;
-
-      camera.position.x = mouseX * 3;
-      camera.position.y = 10 - mouseY * 2;
-      camera.lookAt(0, 0, 0);
-
-      // Car along road path
-      carProgress = (carProgress + 0.0022) % 1;
-      const carPos = roadCurve.getPointAt(carProgress);
-      const carTangent = roadCurve.getTangentAt(carProgress).normalize();
-
-      carGroup.position.copy(carPos);
-      carGroup.position.y += 0.35; // slight hover over tube
-
-      // Orient car facing direction of travel
-      const targetVec = carPos.clone().add(carTangent);
-      carGroup.lookAt(targetVec);
-
-      // Pins hover & rotate
-      pins.forEach((pin, idx) => {
-        pin.head.rotation.y += 0.03;
-        pin.head.rotation.x = Math.sin(elapsedTime * 2 + idx) * 0.2;
-        pin.group.position.y = pin.initialY + Math.sin(elapsedTime * 2.5 + idx * 1.5) * 0.15;
-      });
-
-      // Compass rings subtle rotation
-      outerRing.rotation.z += 0.0015;
-      innerRing.rotation.z -= 0.002;
-
-      // Particle subtle wave
-      particles.rotation.y = elapsedTime * 0.02;
-
-      renderer.render(scene, camera);
-    };
-
-    animate();
-
-    // 11. Responsive Resize
-    const handleResize = () => {
-      if (!container) return;
-      const newWidth = container.clientWidth;
-      const newHeight = container.clientHeight;
-      camera.aspect = newWidth / newHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(newWidth, newHeight);
-    };
-
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-      container.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('resize', handleResize);
-      if (container.contains(renderer.domElement)) {
-        container.removeChild(renderer.domElement);
-      }
-      renderer.dispose();
-    };
-  }, []);
+  const [isHovered, setIsHovered] = useState(false);
 
   return (
-    <div className="relative w-full h-[380px] sm:h-[440px] md:h-[480px] rounded-3xl overflow-hidden bg-gradient-to-b from-zinc-950/80 via-zinc-900/40 to-black/90 border border-zinc-800/80 shadow-2xl backdrop-blur-xl flex items-center justify-center group">
-      {/* 3D Canvas Mount */}
-      <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+    <div 
+      className="relative w-full max-w-lg mx-auto group"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Dynamic Ambient Background Glows */}
+      <div className="absolute -inset-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-amber-500 rounded-[2.5rem] blur-xl opacity-40 group-hover:opacity-75 transition-all duration-700 animate-pulse pointer-events-none"></div>
 
-      {/* Floating UI Badges */}
-      <div className="absolute top-4 left-4 pointer-events-none flex items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/80 backdrop-blur-md border border-emerald-500/30 text-emerald-400 text-[11px] font-bold shadow-lg">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-          Live 3D Route Engine
-        </span>
-      </div>
+      {/* Main Glassmorphic Hero Container */}
+      <div className="relative bg-zinc-950/90 border border-zinc-700/60 rounded-[2.5rem] shadow-2xl overflow-hidden backdrop-blur-2xl transition-transform duration-500 group-hover:scale-[1.015]">
+        
+        {/* Top Header Bar with Project Title & Live Status */}
+        <div className="p-4 px-6 bg-black/80 border-b border-zinc-800/80 flex items-center justify-between backdrop-blur-md">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 p-0.5 shadow-lg shadow-emerald-500/30 flex items-center justify-center">
+              <Navigation className="w-4 h-4 text-black transform rotate-45 stroke-[2.5]" />
+            </div>
+            <div>
+              <h3 className="text-base font-black tracking-wider text-white flex items-center gap-1.5">
+                <span>RouteCraft</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40">
+                  v2.0
+                </span>
+              </h3>
+              <p className="text-[10px] text-zinc-400 font-medium">
+                Multi-Stop Travel & Pitstop Engine
+              </p>
+            </div>
+          </div>
 
-      <div className="absolute bottom-4 right-4 pointer-events-none flex items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/80 backdrop-blur-md border border-zinc-800 text-zinc-400 text-[10px] font-semibold shadow-lg">
-          Interactive Parallax • 60 FPS
-        </span>
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            <span className="text-[11px] font-bold text-emerald-400">Live Routing</span>
+          </div>
+        </div>
+
+        {/* Animated Artwork Showcase Box */}
+        <div className="relative aspect-square w-full overflow-hidden bg-zinc-900">
+          <img
+            src={heroImage}
+            alt="RouteCraft Smart Road Trip Navigation Corridor"
+            className="w-full h-full object-cover object-center transition-transform duration-1000 ease-out group-hover:scale-105"
+            loading="eager"
+          />
+
+          {/* Vignette & Contrast Gradient Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/25 pointer-events-none"></div>
+
+          {/* Floating Widget 1: Realtime Pitstop Alert (Top Left) */}
+          <div className="absolute top-4 left-4 z-10 bg-zinc-950/85 backdrop-blur-md border border-zinc-700/70 p-2.5 px-3.5 rounded-2xl shadow-xl flex items-center gap-2.5 animate-bounce duration-1000">
+            <div className="p-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400">
+              <Utensils className="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-amber-400 uppercase tracking-wider">
+                Pitstop 1 Detected
+              </p>
+              <p className="text-xs font-bold text-white">Highway Dhaba & Cafe</p>
+            </div>
+          </div>
+
+          {/* Floating Widget 2: Time & Fuel Metric (Top Right) */}
+          <div className="absolute top-4 right-4 z-10 bg-zinc-950/85 backdrop-blur-md border border-zinc-700/70 p-2.5 px-3.5 rounded-2xl shadow-xl flex items-center gap-2 text-right">
+            <div>
+              <p className="text-[10px] font-bold text-emerald-400">Time Budget Safe</p>
+              <p className="text-xs font-black text-white">4h 15m / 6h</p>
+            </div>
+            <div className="p-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400">
+              <Clock className="w-3.5 h-3.5" />
+            </div>
+          </div>
+
+          {/* Centered RouteCraft Holographic Title Overlay (Reveals subtly on hover) */}
+          <div className="absolute bottom-16 left-6 right-6 z-10 p-3 rounded-2xl bg-black/80 backdrop-blur-lg border border-zinc-800/90 shadow-2xl flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-emerald-500 text-black flex items-center justify-center font-black text-sm shadow-lg">
+                RC
+              </div>
+              <div>
+                <h4 className="text-xs font-extrabold text-white">
+                  Intelligent Highway Corridors
+                </h4>
+                <p className="text-[10px] text-zinc-400">
+                  Numbered stops • Live road traffic • Budget calculation
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded-xl text-emerald-400 text-[10px] font-bold">
+              <Sparkles className="w-3 h-3" />
+              <span>Optimized</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Metrics Bar */}
+        <div className="p-4 bg-zinc-950 border-t border-zinc-800/80 grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="bg-black/60 p-2.5 rounded-2xl border border-zinc-800/80 flex flex-col items-center">
+            <span className="text-[10px] text-zinc-400 font-medium">Curated Stops</span>
+            <strong className="text-amber-400 font-black text-sm mt-0.5">100% Verified</strong>
+          </div>
+
+          <div className="bg-black/60 p-2.5 rounded-2xl border border-zinc-800/80 flex flex-col items-center">
+            <span className="text-[10px] text-zinc-400 font-medium">Routing Engine</span>
+            <strong className="text-emerald-400 font-black text-sm mt-0.5">TomTom / OSM</strong>
+          </div>
+
+          <div className="bg-black/60 p-2.5 rounded-2xl border border-zinc-800/80 flex flex-col items-center">
+            <span className="text-[10px] text-zinc-400 font-medium">Expense Budget</span>
+            <strong className="text-cyan-400 font-black text-sm mt-0.5">₹ Dynamic</strong>
+          </div>
+        </div>
+
       </div>
     </div>
   );

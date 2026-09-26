@@ -46,16 +46,23 @@ import {
   IndianRupee,
   Search,
   Crosshair,
-  Info
+  Compass,
+  Loader2,
+  Map,
+  X
 } from 'lucide-react';
 
 import { 
   geocodeApi, 
   calculateRouteApi, 
-  discoverPitstopsApi,
-  searchSuggestionsApi 
+  discoverPitstopsApi 
 } from '../services/api';
-import { reverseGeocodeNominatim } from '../utils/reverseGeocodeNominatim';
+import { 
+  searchTomTomPlaces, 
+  reverseGeocodeTomTom, 
+  calculateTomTomRoute,
+  isTomTomConfigured 
+} from '../services/tomtomService';
 import { useAuth } from '../context/AuthContext';
 
 import TimeBudget, { formatDuration } from '../components/TimeBudget';
@@ -79,9 +86,9 @@ const CATEGORIES = [
 ];
 
 const TRAVEL_MODES = [
-  { id: 'car', label: 'Car', icon: Car, desc: 'Highway expressways + tolls' },
-  { id: 'bike', label: 'Bike', icon: Bike, desc: 'Touring & scenic ₹0 tolls' },
-  { id: 'bus', label: 'Bus', icon: Bus, desc: 'Intercity bus transit tariff' },
+  { id: 'car', label: 'Car', icon: Car, desc: 'TomTom road route + expressway tolls' },
+  { id: 'bike', label: 'Bike', icon: Bike, desc: 'Two-wheeler road route & ₹0 tolls' },
+  { id: 'bus', label: 'Bus', icon: Bus, desc: 'Intercity bus highway corridor tariff' },
   { id: 'train', label: 'Train', icon: Train, desc: 'Railway corridor express fare' },
   { id: 'flight', label: 'Flight', icon: Plane, desc: 'Aerial flight path & time' },
 ];
@@ -123,11 +130,18 @@ const Planner = () => {
   const [destSuggestions, setDestSuggestions] = useState([]);
   const [showStartDropdown, setShowStartDropdown] = useState(false);
   const [showDestDropdown, setShowDestDropdown] = useState(false);
+  const [locatingGPS, setLocatingGPS] = useState(false);
 
   // Map Picker Modal State
-  const [mapPickerTarget, setMapPickerTarget] = useState(null);
+  const [mapPickerTarget, setMapPickerTarget] = useState(null); // 'start' | 'dest' | 'stop'
 
-  // Pitstops Discovered
+  // Custom Pitstop Search Bar State
+  const [pitstopSearchQuery, setPitstopSearchQuery] = useState('');
+  const [pitstopSuggestions, setPitstopSuggestions] = useState([]);
+  const [showPitstopDropdown, setShowPitstopDropdown] = useState(false);
+  const [searchingPitstop, setSearchingPitstop] = useState(false);
+
+  // Pitstops Discovered along Corridor
   const [pitstops, setPitstops] = useState([]);
 
   // UI state
@@ -183,7 +197,7 @@ const Planner = () => {
     }
   }, []);
 
-  // Autocomplete search debounce for Start input
+  // Autocomplete search debounce for Start input using TomTom Places Search
   useEffect(() => {
     if (!startQuery || startQuery.trim().length < 2 || !showStartDropdown) {
       setStartSuggestions([]);
@@ -191,16 +205,16 @@ const Planner = () => {
     }
     const timer = setTimeout(async () => {
       try {
-        const res = await searchSuggestionsApi(startQuery);
-        setStartSuggestions(res.data || []);
+        const results = await searchTomTomPlaces(startQuery);
+        setStartSuggestions(results || []);
       } catch (err) {
         setStartSuggestions([]);
       }
-    }, 280);
+    }, 250);
     return () => clearTimeout(timer);
   }, [startQuery, showStartDropdown]);
 
-  // Autocomplete search debounce for Destination input
+  // Autocomplete search debounce for Destination input using TomTom Places Search
   useEffect(() => {
     if (!destQuery || destQuery.trim().length < 2 || !showDestDropdown) {
       setDestSuggestions([]);
@@ -208,14 +222,34 @@ const Planner = () => {
     }
     const timer = setTimeout(async () => {
       try {
-        const res = await searchSuggestionsApi(destQuery);
-        setDestSuggestions(res.data || []);
+        const results = await searchTomTomPlaces(destQuery);
+        setDestSuggestions(results || []);
       } catch (err) {
         setDestSuggestions([]);
       }
-    }, 280);
+    }, 250);
     return () => clearTimeout(timer);
   }, [destQuery, showDestDropdown]);
+
+  // Pitstop Search Autocomplete
+  useEffect(() => {
+    if (!pitstopSearchQuery || pitstopSearchQuery.trim().length < 2 || !showPitstopDropdown) {
+      setPitstopSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setSearchingPitstop(true);
+      try {
+        const results = await searchTomTomPlaces(pitstopSearchQuery);
+        setPitstopSuggestions(results || []);
+      } catch (err) {
+        setPitstopSuggestions([]);
+      } finally {
+        setSearchingPitstop(false);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [pitstopSearchQuery, showPitstopDropdown]);
 
   // Primary handler: Geocodes start and dest, calculates base route, and fetches candidate pitstops
   const handleCalculateRoute = async (startLocStr, destLocStr, vType, travelers) => {
@@ -239,25 +273,53 @@ const Planner = () => {
       let destPoint = destination;
 
       if (!startPoint || startPoint.name !== sQuery) {
-        const resStart = await geocodeApi(sQuery.trim());
-        startPoint = resStart.data;
+        const tomtomResults = await searchTomTomPlaces(sQuery.trim());
+        if (tomtomResults && tomtomResults.length > 0) {
+          startPoint = {
+            name: tomtomResults[0].fullName || tomtomResults[0].name,
+            latitude: tomtomResults[0].latitude,
+            longitude: tomtomResults[0].longitude,
+          };
+        } else {
+          const resStart = await geocodeApi(sQuery.trim());
+          startPoint = resStart.data;
+        }
         setOrigin(startPoint);
       }
 
       if (!destPoint || destPoint.name !== dQuery) {
-        const resDest = await geocodeApi(dQuery.trim());
-        destPoint = resDest.data;
+        const tomtomResults = await searchTomTomPlaces(dQuery.trim());
+        if (tomtomResults && tomtomResults.length > 0) {
+          destPoint = {
+            name: tomtomResults[0].fullName || tomtomResults[0].name,
+            latitude: tomtomResults[0].latitude,
+            longitude: tomtomResults[0].longitude,
+          };
+        } else {
+          const resDest = await geocodeApi(dQuery.trim());
+          destPoint = resDest.data;
+        }
         setDestination(destPoint);
       }
 
       setStops([]);
 
-      const routeRes = await calculateRouteApi(
-        [startPoint, destPoint],
-        currentVehicle,
-        currentTravelers
-      );
-      const { coordinates, distance, duration, transitInfo: tInfo } = routeRes.data;
+      // Calculate route (TomTom / Road / Train / Flight)
+      let routeData;
+      if (currentVehicle === 'car' || currentVehicle === 'bike') {
+        try {
+          routeData = await calculateTomTomRoute([startPoint, destPoint], currentVehicle);
+        } catch (ttErr) {
+          console.warn('Direct TomTom routing notice, falling back:', ttErr.message);
+          const routeRes = await calculateRouteApi([startPoint, destPoint], currentVehicle, currentTravelers);
+          routeData = routeRes.data;
+        }
+      } else {
+        const routeRes = await calculateRouteApi([startPoint, destPoint], currentVehicle, currentTravelers);
+        routeData = routeRes.data;
+      }
+
+      const { coordinates, distance, duration, transitInfo: tInfo } = routeData;
 
       setRouteCoordinates(coordinates || []);
       setTotalDistance(distance || 0);
@@ -301,6 +363,7 @@ const Planner = () => {
   };
 
   // Recalculate route whenever stops array or travel mode changes
+  // Route order: START -> 1 -> 2 -> 3 -> DESTINATION
   const updateFullRouteWithStops = useCallback(
     async (newStops, vType, travelers) => {
       if (!origin || !destination) return;
@@ -308,8 +371,21 @@ const Planner = () => {
       const currentTravelers = travelers || travelersCount;
       try {
         const points = [origin, ...newStops, destination];
-        const routeRes = await calculateRouteApi(points, currentVehicle, currentTravelers);
-        const { coordinates, distance, duration, transitInfo: tInfo } = routeRes.data;
+        let routeData;
+
+        if (currentVehicle === 'car' || currentVehicle === 'bike') {
+          try {
+            routeData = await calculateTomTomRoute(points, currentVehicle);
+          } catch (ttErr) {
+            const routeRes = await calculateRouteApi(points, currentVehicle, currentTravelers);
+            routeData = routeRes.data;
+          }
+        } else {
+          const routeRes = await calculateRouteApi(points, currentVehicle, currentTravelers);
+          routeData = routeRes.data;
+        }
+
+        const { coordinates, distance, duration, transitInfo: tInfo } = routeData;
         setRouteCoordinates(coordinates || []);
         setTotalDistance(distance || 0);
         setDrivingDuration(duration || 0);
@@ -350,52 +426,119 @@ const Planner = () => {
   // Select suggestion from autocomplete dropdown
   const handleSelectSuggestion = (place, target) => {
     if (target === 'start') {
-      setStartQuery(place.name);
+      const placeName = place.fullName || place.name;
+      setStartQuery(placeName);
       setOrigin({
-        name: place.name,
-        latitude: place.latitude,
-        longitude: place.longitude,
+        name: placeName,
+        latitude: Number(place.latitude),
+        longitude: Number(place.longitude),
       });
       setShowStartDropdown(false);
       if (destination) {
-        handleCalculateRoute(place.name, destination.name, vehicleType, travelersCount);
+        handleCalculateRoute(placeName, destination.name, vehicleType, travelersCount);
       }
     } else {
-      setDestQuery(place.name);
+      const placeName = place.fullName || place.name;
+      setDestQuery(placeName);
       setDestination({
-        name: place.name,
-        latitude: place.latitude,
-        longitude: place.longitude,
+        name: placeName,
+        latitude: Number(place.latitude),
+        longitude: Number(place.longitude),
       });
       setShowDestDropdown(false);
       if (origin) {
-        handleCalculateRoute(origin.name, place.name, vehicleType, travelersCount);
+        handleCalculateRoute(origin.name, placeName, vehicleType, travelersCount);
       }
     }
+  };
+
+  // Use Browser GPS for Start Location
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setErrorMessage('Geolocation is not supported by your browser. Please use Pick on Map.');
+      return;
+    }
+
+    setLocatingGPS(true);
+    setErrorMessage('');
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        setLocatingGPS(false);
+
+        try {
+          const addr = await reverseGeocodeTomTom(lat, lon);
+          const name = addr.name || addr.fullAddress || `Current Location (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+          setStartQuery(name);
+          const startObj = {
+            name,
+            latitude: lat,
+            longitude: lon,
+          };
+          setOrigin(startObj);
+
+          if (destination) {
+            handleCalculateRoute(name, destination.name, vehicleType, travelersCount);
+          }
+        } catch (e) {
+          const fallbackName = `Current Location (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+          setStartQuery(fallbackName);
+          setOrigin({ name: fallbackName, latitude: lat, longitude: lon });
+        }
+      },
+      (err) => {
+        setLocatingGPS(false);
+        setErrorMessage(
+          `Location permission was denied or unavailable (${err.message}). You can use "Pick on Map" to select your starting location.`
+        );
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   };
 
   // Confirm Location Picked on Map
   const handleConfirmLocationFromMap = (locationData) => {
     if (mapPickerTarget === 'start') {
       setStartQuery(locationData.name);
-      setOrigin({
+      const newOrig = {
         name: locationData.name,
         latitude: locationData.latitude,
         longitude: locationData.longitude,
-      });
+      };
+      setOrigin(newOrig);
       if (destination) {
         handleCalculateRoute(locationData.name, destination.name, vehicleType, travelersCount);
       }
     } else if (mapPickerTarget === 'dest') {
       setDestQuery(locationData.name);
-      setDestination({
+      const newDest = {
         name: locationData.name,
         latitude: locationData.latitude,
         longitude: locationData.longitude,
-      });
+      };
+      setDestination(newDest);
       if (origin) {
         handleCalculateRoute(origin.name, locationData.name, vehicleType, travelersCount);
       }
+    } else if (mapPickerTarget === 'stop') {
+      const newStop = {
+        id: `stop-${Date.now()}`,
+        name: locationData.name,
+        latitude: locationData.latitude,
+        longitude: locationData.longitude,
+        stopDurationMinutes: 30,
+        category: 'Pitstop',
+        street: locationData.addressDetails?.street || '',
+        city: locationData.addressDetails?.city || '',
+        state: locationData.addressDetails?.state || '',
+        pin: locationData.addressDetails?.pin || '',
+      };
+      const updatedStops = [...stops, newStop];
+      setStops(updatedStops);
+      setActiveTab('itinerary');
+      updateFullRouteWithStops(updatedStops, vehicleType, travelersCount);
     }
   };
 
@@ -439,6 +582,28 @@ const Planner = () => {
     }
     setStops(updatedStops);
     updateFullRouteWithStops(updatedStops, vehicleType, travelersCount);
+  };
+
+  // Select pitstop from search dropdown
+  const handleSelectPitstopSuggestion = (place) => {
+    const newStop = {
+      id: `stop-${Date.now()}`,
+      name: place.fullName || place.name,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      stopDurationMinutes: 30,
+      category: place.category || 'Pitstop',
+      street: place.street || '',
+      city: place.city || '',
+      state: place.state || '',
+      pin: place.postalCode || '',
+    };
+    const updated = [...stops, newStop];
+    setStops(updated);
+    setPitstopSearchQuery('');
+    setShowPitstopDropdown(false);
+    setActiveTab('itinerary');
+    updateFullRouteWithStops(updated, vehicleType, travelersCount);
   };
 
   // Move stop position earlier / later via buttons
@@ -486,7 +651,7 @@ const Planner = () => {
     updateFullRouteWithStops(updated, vehicleType, travelersCount);
   };
 
-  // Interactive click anywhere on map to add numbered Stop 1, Stop 2, Stop 3... with full Nominatim reverse geocode
+  // Interactive click anywhere on map to add numbered Stop 1, Stop 2, Stop 3... with full TomTom reverse geocode
   const handleMapClick = async (lat, lng) => {
     const tempId = `stop-click-${Date.now()}-${Math.random()}`;
     const newStopPlaceholder = {
@@ -504,7 +669,7 @@ const Planner = () => {
     setActiveTab('itinerary');
 
     try {
-      const geoResult = await reverseGeocodeNominatim(lat, lng);
+      const geoResult = await reverseGeocodeTomTom(lat, lng);
       setStops((prevStops) =>
         prevStops.map((s) => {
           if (s.id === tempId || (s.latitude === lat && s.longitude === lng && s.loadingAddress)) {
@@ -542,7 +707,7 @@ const Planner = () => {
           s.id === tempId
             ? {
                 ...s,
-                name: `Address could not be found. Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+                name: `Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
                 loadingAddress: false,
               }
             : s
@@ -561,29 +726,12 @@ const Planner = () => {
     setTimeout(() => setShareSuccess(false), 3000);
   };
 
-  // Export to Google Maps Navigation link
-  const handleOpenGoogleMaps = () => {
+  // Open Navigation link
+  const handleOpenNav = () => {
     if (!origin || !destination) return;
-    const originStr = encodeURIComponent(`${origin.latitude},${origin.longitude}`);
-    const destStr = encodeURIComponent(`${destination.latitude},${destination.longitude}`);
-    let url = `https://www.google.com/maps/dir/?api=1&origin=${originStr}&destination=${destStr}`;
-    if (vehicleType === 'bike') {
-      url += `&travelmode=two_wheeler`;
-    } else if (vehicleType === 'bus' || vehicleType === 'train') {
-      url += `&travelmode=transit`;
-    } else if (vehicleType === 'flight') {
-      url = `https://www.google.com/travel/flights?q=flights+from+${encodeURIComponent(
-        startQuery
-      )}+to+${encodeURIComponent(destQuery)}`;
-    } else {
-      url += `&travelmode=driving`;
-    }
-    if (vehicleType !== 'flight' && stops.length > 0) {
-      const waypoints = stops
-        .map((s) => `${s.latitude},${s.longitude}`)
-        .join('|');
-      url += `&waypoints=${encodeURIComponent(waypoints)}`;
-    }
+    const originStr = `${origin.latitude},${origin.longitude}`;
+    const destStr = `${destination.latitude},${destination.longitude}`;
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}`;
     window.open(url, '_blank');
   };
 
@@ -694,14 +842,30 @@ const Planner = () => {
                     <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
                     Start Location
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => setMapPickerTarget('start')}
-                    className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1 cursor-pointer hover:underline"
-                  >
-                    <MapPin className="w-3 h-3" />
-                    <span>Pick on Map</span>
-                  </button>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={handleUseCurrentLocation}
+                      disabled={locatingGPS}
+                      className="text-[10px] text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 cursor-pointer hover:underline"
+                      title="Use My Current Location"
+                    >
+                      {locatingGPS ? (
+                        <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+                      ) : (
+                        <Crosshair className="w-3 h-3" />
+                      )}
+                      <span>My Location</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMapPickerTarget('start')}
+                      className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1 cursor-pointer hover:underline"
+                    >
+                      <MapPin className="w-3 h-3" />
+                      <span>Pick on Map</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="relative">
@@ -715,7 +879,7 @@ const Planner = () => {
                       setShowStartDropdown(true);
                     }}
                     onFocus={() => setShowStartDropdown(true)}
-                    placeholder="e.g. Mumbai, Maharashtra"
+                    placeholder="Search Indian city, road, or address..."
                     className="w-full bg-black border border-zinc-800 rounded-xl pl-3.5 pr-9 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
                   />
                   <button
@@ -724,7 +888,7 @@ const Planner = () => {
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-emerald-400 transition-colors p-1 cursor-pointer"
                     title="Pick Start Location on Map"
                   >
-                    <Crosshair className="w-4 h-4" />
+                    <Map className="w-4 h-4" />
                   </button>
                 </div>
 
@@ -741,10 +905,10 @@ const Planner = () => {
                         <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                         <div className="min-w-0">
                           <span className="text-xs font-bold text-zinc-100 block truncate">
-                            {item.shortName || item.name.split(',')[0]}
+                            {item.name}
                           </span>
                           <span className="text-[10px] text-zinc-400 truncate block">
-                            {item.name}
+                            {item.fullName}
                           </span>
                         </div>
                       </button>
@@ -781,7 +945,7 @@ const Planner = () => {
                       setShowDestDropdown(true);
                     }}
                     onFocus={() => setShowDestDropdown(true)}
-                    placeholder="e.g. Goa, India"
+                    placeholder="Search destination city or landmark..."
                     className="w-full bg-black border border-zinc-800 rounded-xl pl-3.5 pr-9 py-2 text-sm text-white focus:outline-none focus:border-rose-500 transition-colors"
                   />
                   <button
@@ -790,7 +954,7 @@ const Planner = () => {
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-rose-400 transition-colors p-1 cursor-pointer"
                     title="Pick Destination on Map"
                   >
-                    <Crosshair className="w-4 h-4" />
+                    <Map className="w-4 h-4" />
                   </button>
                 </div>
 
@@ -807,10 +971,10 @@ const Planner = () => {
                         <MapPin className="w-3.5 h-3.5 text-rose-400 shrink-0" />
                         <div className="min-w-0">
                           <span className="text-xs font-bold text-zinc-100 block truncate">
-                            {item.shortName || item.name.split(',')[0]}
+                            {item.name}
                           </span>
                           <span className="text-[10px] text-zinc-400 truncate block">
-                            {item.name}
+                            {item.fullName}
                           </span>
                         </div>
                       </button>
@@ -874,7 +1038,7 @@ const Planner = () => {
                 {loading ? (
                   <>
                     <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
-                    <span>Calculating Dynamic Route...</span>
+                    <span>Calculating TomTom Route...</span>
                   </>
                 ) : (
                   <>
@@ -884,6 +1048,63 @@ const Planner = () => {
                 )}
               </button>
             </form>
+          </div>
+
+          {/* Add Custom Pit Stop Section */}
+          <div className="bg-zinc-950/90 border border-zinc-800 rounded-3xl p-4 shadow-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                <Plus className="w-3.5 h-3.5 text-amber-400" />
+                <span>Add Pit Stop</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setMapPickerTarget('stop')}
+                className="text-[11px] text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 cursor-pointer hover:underline"
+              >
+                <MapPin className="w-3 h-3" />
+                <span>Pick on Map</span>
+              </button>
+            </div>
+
+            {/* Quick Pitstop Search Input */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search pit stop to add (e.g. Dhaba, Cafe, Viewpoint)..."
+                value={pitstopSearchQuery}
+                onChange={(e) => {
+                  setPitstopSearchQuery(e.target.value);
+                  setShowPitstopDropdown(true);
+                }}
+                onFocus={() => setShowPitstopDropdown(true)}
+                className="w-full bg-black border border-zinc-800 rounded-xl pl-8 pr-8 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+              />
+              {searchingPitstop && (
+                <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin absolute right-2.5 top-1/2 -translate-y-1/2" />
+              )}
+
+              {/* Suggestions Dropdown */}
+              {showPitstopDropdown && pitstopSuggestions.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-zinc-950 border border-zinc-700 rounded-2xl shadow-2xl max-h-48 overflow-y-auto">
+                  {pitstopSuggestions.map((item, idx) => (
+                    <button
+                      key={`pitstop-search-${idx}`}
+                      type="button"
+                      onClick={() => handleSelectPitstopSuggestion(item)}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-zinc-900 transition-colors flex items-center gap-2 border-b border-zinc-800/60 last:border-none text-xs"
+                    >
+                      <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <div className="min-w-0">
+                        <span className="font-bold text-white block truncate">{item.name}</span>
+                        <span className="text-[10px] text-zinc-400 block truncate">{item.fullName}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Category Filter Pills (for road trips) */}
@@ -973,7 +1194,7 @@ const Planner = () => {
               <div>
                 {stops.length === 0 ? (
                   <div className="text-center py-10 px-4 bg-black rounded-2xl border border-dashed border-zinc-800 text-zinc-400 text-xs">
-                    No pitstops added to itinerary yet. Switch to "Nearby Pitstops" and click "+ Add Stop"!
+                    No pitstops added to itinerary yet. Switch to "Nearby Pitstops" or click "+ Add Pit Stop"!
                   </div>
                 ) : (
                   <DndContext
@@ -1046,7 +1267,7 @@ const Planner = () => {
 
               <div className="bg-black p-2.5 rounded-xl border border-zinc-800">
                 <span className="text-zinc-400 text-[10px] block">
-                  {vehicleType === 'flight' ? 'Flight Time' : vehicleType === 'train' ? 'Train Time' : 'Driving Time'}
+                  {vehicleType === 'flight' ? 'Flight Time' : vehicleType === 'train' ? 'Train Time' : 'Travel Time'}
                 </span>
                 <strong className="text-zinc-100 font-bold text-sm">{formatDuration(drivingDuration)}</strong>
               </div>
@@ -1089,15 +1310,15 @@ const Planner = () => {
                   <span className="hidden sm:inline">{shareSuccess ? 'Copied!' : 'Share'}</span>
                 </button>
 
-                {/* Google Maps Nav */}
+                {/* Open Navigation */}
                 <button
                   type="button"
-                  onClick={handleOpenGoogleMaps}
+                  onClick={handleOpenNav}
                   className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors text-xs flex items-center gap-1.5 border border-zinc-800 cursor-pointer"
-                  title="Open in Google Maps"
+                  title="Open Navigation Route"
                 >
                   <ExternalLink className="w-4 h-4 text-amber-400" />
-                  <span className="hidden sm:inline">Google Maps</span>
+                  <span className="hidden sm:inline">Navigate</span>
                 </button>
 
                 {/* Save Trip Button */}
@@ -1109,7 +1330,6 @@ const Planner = () => {
                       return;
                     }
                     if (!isAuthenticated) {
-                      // Preserve current planner state in session storage so user doesn't lose work
                       sessionStorage.setItem(
                         'routecraft_pending_trip',
                         JSON.stringify({
@@ -1138,7 +1358,7 @@ const Planner = () => {
             </div>
           </div>
 
-          {/* Leaflet Map Card */}
+          {/* TomTom Map Card */}
           <div className="h-[580px] w-full rounded-3xl overflow-hidden border border-zinc-800 shadow-2xl">
             <MapComponent
               origin={origin}
@@ -1151,6 +1371,34 @@ const Planner = () => {
               onOpenPlaceModal={(p) => setSelectedPlaceModal(p)}
               onMapClick={handleMapClick}
               onRemoveStop={handleRemoveStop}
+              onSetAsOrigin={(loc) => {
+                setStartQuery(loc.name);
+                setOrigin(loc);
+                if (destination) handleCalculateRoute(loc.name, destination.name, vehicleType, travelersCount);
+              }}
+              onSetAsDestination={(loc) => {
+                setDestQuery(loc.name);
+                setDestination(loc);
+                if (origin) handleCalculateRoute(origin.name, loc.name, vehicleType, travelersCount);
+              }}
+              onAddAsStop={(loc) => {
+                const newStop = {
+                  id: `stop-${Date.now()}`,
+                  name: loc.name,
+                  latitude: loc.latitude,
+                  longitude: loc.longitude,
+                  stopDurationMinutes: 30,
+                  category: loc.category || 'Pitstop',
+                  street: loc.address?.split(',')[0] || '',
+                  city: loc.city || '',
+                  state: loc.state || '',
+                  pin: loc.pin || '',
+                };
+                const updated = [...stops, newStop];
+                setStops(updated);
+                setActiveTab('itinerary');
+                updateFullRouteWithStops(updated, vehicleType, travelersCount);
+              }}
             />
           </div>
         </div>
@@ -1162,7 +1410,14 @@ const Planner = () => {
         <MapLocationPickerModal
           isOpen={!!mapPickerTarget}
           targetType={mapPickerTarget}
-          initialLocation={mapPickerTarget === 'start' ? origin : destination}
+          stopNumber={stops.length + 1}
+          initialLocation={
+            mapPickerTarget === 'start'
+              ? origin
+              : mapPickerTarget === 'dest'
+              ? destination
+              : null
+          }
           onClose={() => setMapPickerTarget(null)}
           onConfirmLocation={handleConfirmLocationFromMap}
         />

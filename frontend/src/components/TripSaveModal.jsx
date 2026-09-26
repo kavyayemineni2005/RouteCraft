@@ -86,13 +86,56 @@ const TripSaveModal = ({
     setErrorMsg('');
 
     try {
+      // Clean stops to ensure no circular refs or extra frontend-only properties
+      const cleanedStops = (tripData.stops || []).map((s, idx) => ({
+        name: s.name || `Stop ${idx + 1}`,
+        category: s.category || 'Pitstop',
+        latitude: Number(s.latitude) || 0,
+        longitude: Number(s.longitude) || 0,
+        detourMinutes: Number(s.detourMinutes) || 0,
+        stopDurationMinutes: Number(s.stopDurationMinutes) || 30,
+        estimatedCost: Number(s.estimatedCost) || 0,
+        description: typeof s.description === 'string' ? s.description.slice(0, 300) : '',
+        rating: Number(s.rating) || 4.5,
+        orderIndex: idx,
+      }));
+
+      // Optimize route coordinates to keep payload lightweight (sample if > 1500 points)
+      let cleanedCoordinates = tripData.routeCoordinates || [];
+      if (cleanedCoordinates.length > 1500) {
+        const step = Math.ceil(cleanedCoordinates.length / 1500);
+        cleanedCoordinates = cleanedCoordinates.filter(
+          (_, i) => i % step === 0 || i === cleanedCoordinates.length - 1
+        );
+      }
+      cleanedCoordinates = cleanedCoordinates.map(([lat, lon]) => [
+        Math.round(lat * 100000) / 100000,
+        Math.round(lon * 100000) / 100000,
+      ]);
+
       const payload = {
         title: title.trim(),
-        startLocation: resolvedStart,
-        endLocation: resolvedEnd,
-        start: resolvedStart,
-        destination: resolvedEnd,
-        stops: tripData.stops || [],
+        startLocation: {
+          name: resolvedStart.name || 'Start Point',
+          latitude: Number(resolvedStart.latitude) || 0,
+          longitude: Number(resolvedStart.longitude) || 0,
+        },
+        endLocation: {
+          name: resolvedEnd.name || 'Destination',
+          latitude: Number(resolvedEnd.latitude) || 0,
+          longitude: Number(resolvedEnd.longitude) || 0,
+        },
+        start: {
+          name: resolvedStart.name || 'Start Point',
+          latitude: Number(resolvedStart.latitude) || 0,
+          longitude: Number(resolvedStart.longitude) || 0,
+        },
+        destination: {
+          name: resolvedEnd.name || 'Destination',
+          latitude: Number(resolvedEnd.latitude) || 0,
+          longitude: Number(resolvedEnd.longitude) || 0,
+        },
+        stops: cleanedStops,
         totalDurationMinutes: Number(tripData.totalDurationMinutes) || 0,
         travelTime: Number(tripData.totalDurationMinutes) || 0,
         availableTimeBudgetMinutes: Number(tripData.availableTimeBudgetMinutes) || 480,
@@ -113,7 +156,7 @@ const TripSaveModal = ({
           Number(tripData.remainingBudget) !== undefined
             ? Number(tripData.remainingBudget)
             : Number(tripData.totalBudget || 5000) - Number(tripData.estimatedTotal || 0),
-        routeCoordinates: tripData.routeCoordinates || [],
+        routeCoordinates: cleanedCoordinates,
         notes: notes.trim(),
       };
 

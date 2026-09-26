@@ -1,102 +1,24 @@
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
-import L from 'leaflet';
-import { MapPin, Trash2, Loader2, Navigation, Info, ExternalLink } from 'lucide-react';
-
-// Custom DivIcon Generator for dynamic numbered waypoint stops
-const createNumberedStopIcon = (stopNumber) =>
-  L.divIcon({
-    className: 'custom-leaflet-icon',
-    html: `
-      <div class="relative flex items-center justify-center cursor-pointer transition-transform hover:scale-110">
-        <div class="absolute -inset-1.5 bg-amber-500/30 rounded-full animate-ping"></div>
-        <div class="w-8 h-8 rounded-full bg-amber-500 border-2 border-zinc-950 text-black flex items-center justify-center font-black text-xs shadow-xl shadow-amber-500/50">
-          ${stopNumber}
-        </div>
-      </div>
-    `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -16],
-  });
-
-const createStartIcon = () =>
-  L.divIcon({
-    className: 'custom-leaflet-icon',
-    html: `
-      <div class="relative flex items-center justify-center">
-        <div class="absolute -inset-1.5 bg-emerald-500/30 rounded-full animate-ping"></div>
-        <div class="w-8 h-8 rounded-full bg-emerald-500 border-2 border-zinc-950 text-black flex items-center justify-center font-black text-xs shadow-xl shadow-emerald-500/50">
-          A
-        </div>
-      </div>
-    `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -16],
-  });
-
-const createDestIcon = () =>
-  L.divIcon({
-    className: 'custom-leaflet-icon',
-    html: `
-      <div class="relative flex items-center justify-center">
-        <div class="absolute -inset-1.5 bg-rose-500/30 rounded-full animate-ping"></div>
-        <div class="w-8 h-8 rounded-full bg-rose-500 border-2 border-zinc-950 text-white flex items-center justify-center font-black text-xs shadow-xl shadow-rose-500/50">
-          B
-        </div>
-      </div>
-    `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -16],
-  });
-
-const createCandidatePitstopIcon = (category) => {
-  let bgColor = 'bg-amber-500';
-  if (category === 'Food') bgColor = 'bg-orange-500';
-  else if (category === 'Coffee') bgColor = 'bg-amber-600';
-  else if (category === 'Nature') bgColor = 'bg-emerald-600';
-  else if (category === 'Viewpoints') bgColor = 'bg-teal-500';
-  else if (category === 'Attractions') bgColor = 'bg-yellow-400';
-  else if (category === 'Fuel/rest stops') bgColor = 'bg-emerald-500';
-  else if (category === 'Shopping') bgColor = 'bg-orange-400';
-
-  return L.divIcon({
-    className: 'custom-leaflet-icon',
-    html: `
-      <div class="w-5 h-5 rounded-full ${bgColor} border-2 border-zinc-950 text-black flex items-center justify-center text-[10px] font-bold shadow-md cursor-pointer hover:scale-125 transition-transform">
-        ●
-      </div>
-    `,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-    popupAnchor: [0, -10],
-  });
-};
-
-// Map click event handler component
-const MapClickHandler = ({ onMapClick }) => {
-  useMapEvents({
-    click(e) {
-      if (onMapClick) {
-        onMapClick(e.latlng.lat, e.latlng.lng);
-      }
-    },
-  });
-  return null;
-};
-
-// Dynamic bounds fitting helper
-const FitBoundsHandler = ({ bounds }) => {
-  const map = useMap();
-  useEffect(() => {
-    if (bounds && bounds.length > 0) {
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15, animate: true });
-    }
-  }, [bounds, map]);
-  return null;
-};
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import tt from '@tomtom-international/web-sdk-maps';
+import '@tomtom-international/web-sdk-maps/dist/maps.css';
+import { 
+  MapPin, 
+  Trash2, 
+  Loader2, 
+  Navigation, 
+  Info, 
+  ExternalLink, 
+  Layers, 
+  Plus, 
+  Compass,
+  AlertCircle
+} from 'lucide-react';
+import { 
+  getTomTomApiKey, 
+  isTomTomConfigured, 
+  createTomTomMarkerElement,
+  reverseGeocodeTomTom 
+} from '../services/tomtomService';
 
 const MapComponent = ({
   origin,
@@ -109,328 +31,483 @@ const MapComponent = ({
   onOpenPlaceModal,
   onMapClick,
   onRemoveStop,
+  onAddAsStop,
+  onSetAsOrigin,
+  onSetAsDestination,
 }) => {
-  // Default map center (Central India / India overview)
-  const defaultCenter = [20.5937, 78.9629];
-  const defaultZoom = 5;
+  const mapContainerRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const markersRef = useRef([]);
+  const clickMarkerRef = useRef(null);
 
-  // Build points for auto-fit bounds
-  const boundsPoints = [];
-  if (origin && origin.latitude && origin.longitude) {
-    boundsPoints.push([Number(origin.latitude), Number(origin.longitude)]);
-  }
-  if (destination && destination.latitude && destination.longitude) {
-    boundsPoints.push([Number(destination.latitude), Number(destination.longitude)]);
-  }
-  stops.forEach((s) => {
-    if (s.latitude && s.longitude) boundsPoints.push([Number(s.latitude), Number(s.longitude)]);
-  });
-  if (routeCoordinates && routeCoordinates.length > 0) {
-    boundsPoints.push(routeCoordinates[0]);
-    boundsPoints.push(routeCoordinates[Math.floor(routeCoordinates.length / 2)]);
-    boundsPoints.push(routeCoordinates[routeCoordinates.length - 1]);
-  }
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [clickedLocation, setClickedLocation] = useState(null);
+  const [isGeocodingClick, setIsGeocodingClick] = useState(false);
+  const [mapError, setMapError] = useState(null);
 
-  // Dynamic polyline visual styling per travel mode
-  const isFlight = vehicleType === 'flight';
-  const isTrain = vehicleType === 'train';
-  const isBike = vehicleType === 'bike';
+  const apiKey = getTomTomApiKey();
 
-  const primaryColor = isFlight
-    ? '#14b8a6' // teal
-    : isTrain
-    ? '#10b981' // emerald
-    : isBike
-    ? '#10b981' // emerald
-    : '#f59e0b'; // amber-orange for car/bus
+  // 1. Initialize TomTom Map
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
 
-  const glowColor = isFlight ? '#5eead4' : isTrain ? '#6ee7b7' : isBike ? '#6ee7b7' : '#fcd34d';
+    // Clean up previous instance if any
+    if (mapInstanceRef.current) {
+      try {
+        mapInstanceRef.current.remove();
+      } catch (e) {
+        console.warn('Map cleanup notice:', e);
+      }
+      mapInstanceRef.current = null;
+    }
 
-  // Tile layer from OpenStreetMap / Carto Voyager
-  const tileUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-  const tileAttribution =
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+    const keyToUse = apiKey || 'YOUR_TOMTOM_API_KEY';
+
+    try {
+      // Central India coordinates [longitude, latitude]
+      const defaultCenter = [78.9629, 20.5937];
+      const defaultZoom = 4.8;
+
+      const map = tt.map({
+        key: keyToUse,
+        container: mapContainerRef.current,
+        center: defaultCenter,
+        zoom: defaultZoom,
+        dragPan: true,
+        stylesConfig: {
+          style: 'main',
+          layer: 'basic',
+        },
+      });
+
+      // Add navigation and scale controls
+      map.addControl(new tt.NavigationControl(), 'top-right');
+      map.addControl(new tt.ScaleControl({ metric: true }), 'bottom-left');
+
+      map.on('load', () => {
+        setMapLoaded(true);
+        setMapError(null);
+        map.resize();
+      });
+
+      map.on('error', (err) => {
+        console.warn('[TomTom Map Notice]:', err);
+        if (!apiKey || apiKey === 'YOUR_TOMTOM_API_KEY') {
+          setMapError('TomTom API key not configured. Add VITE_TOMTOM_API_KEY in frontend/.env to enable live map tiles.');
+        }
+      });
+
+      // Handle map clicks for "Pick on Map" and interactive stop addition
+      map.on('click', async (e) => {
+        const { lng, lat } = e.lngLat;
+
+        if (onMapClick) {
+          onMapClick(lat, lng);
+        }
+
+        // Reverse geocode clicked position
+        setIsGeocodingClick(true);
+        try {
+          const addr = await reverseGeocodeTomTom(lat, lng);
+          setClickedLocation({
+            lat,
+            lng,
+            name: addr.name || 'Selected Location',
+            fullAddress: addr.fullAddress || '',
+            area: addr.area || '',
+            city: addr.city || '',
+            state: addr.state || '',
+            pin: addr.pin || '',
+          });
+        } catch (revErr) {
+          setClickedLocation({
+            lat,
+            lng,
+            name: `Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+            fullAddress: `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          });
+        } finally {
+          setIsGeocodingClick(false);
+        }
+      });
+
+      mapInstanceRef.current = map;
+    } catch (initErr) {
+      console.error('[TomTom Map Init Error]:', initErr);
+      setMapError('Failed to initialize TomTom map. Please check your API key configuration.');
+    }
+
+    return () => {
+      if (mapInstanceRef.current) {
+        try {
+          mapInstanceRef.current.remove();
+        } catch (e) {}
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [apiKey]);
+
+  // Handle window resizing
+  useEffect(() => {
+    const handleResize = () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.resize();
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // 2. Render Markers & Route on Map
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !mapLoaded) return;
+
+    // Clear existing markers
+    markersRef.current.forEach((m) => {
+      try {
+        m.remove();
+      } catch (e) {}
+    });
+    markersRef.current = [];
+
+    const bounds = new tt.LngLatBounds();
+    let hasPoints = false;
+
+    // A. Start / Origin Marker
+    if (origin && origin.latitude && origin.longitude) {
+      const origLngLat = [Number(origin.longitude), Number(origin.latitude)];
+      const el = createTomTomMarkerElement('start');
+      
+      const popupHtml = `
+        <div style="padding: 8px; font-family: sans-serif; color: #18181b; min-width: 160px;">
+          <div style="font-weight: 700; color: #059669; font-size: 13px; margin-bottom: 2px;">🟢 START POINT</div>
+          <div style="font-weight: 600; font-size: 13px; color: #111827;">${origin.name || 'Origin'}</div>
+          <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">${Number(origin.latitude).toFixed(4)}°, ${Number(origin.longitude).toFixed(4)}°</div>
+        </div>
+      `;
+
+      const popup = new tt.Popup({ offset: 25, closeButton: false }).setHTML(popupHtml);
+      const marker = new tt.Marker({ element: el })
+        .setLngLat(origLngLat)
+        .setPopup(popup)
+        .addTo(map);
+
+      markersRef.current.push(marker);
+      bounds.extend(origLngLat);
+      hasPoints = true;
+    }
+
+    // B. Destination Marker
+    if (destination && destination.latitude && destination.longitude) {
+      const destLngLat = [Number(destination.longitude), Number(destination.latitude)];
+      const el = createTomTomMarkerElement('dest');
+
+      const popupHtml = `
+        <div style="padding: 8px; font-family: sans-serif; color: #18181b; min-width: 160px;">
+          <div style="font-weight: 700; color: #e11d48; font-size: 13px; margin-bottom: 2px;">🔴 DESTINATION</div>
+          <div style="font-weight: 600; font-size: 13px; color: #111827;">${destination.name || 'Destination'}</div>
+          <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">${Number(destination.latitude).toFixed(4)}°, ${Number(destination.longitude).toFixed(4)}°</div>
+        </div>
+      `;
+
+      const popup = new tt.Popup({ offset: 25, closeButton: false }).setHTML(popupHtml);
+      const marker = new tt.Marker({ element: el })
+        .setLngLat(destLngLat)
+        .setPopup(popup)
+        .addTo(map);
+
+      markersRef.current.push(marker);
+      bounds.extend(destLngLat);
+      hasPoints = true;
+    }
+
+    // C. Waypoint / Pitstop Markers (Numbered 1, 2, 3...)
+    stops.forEach((stop, index) => {
+      if (stop.latitude && stop.longitude) {
+        const stopLngLat = [Number(stop.longitude), Number(stop.latitude)];
+        const stopNumber = index + 1;
+        const el = createTomTomMarkerElement('stop', stopNumber);
+
+        const popupHtml = `
+          <div style="padding: 10px; font-family: sans-serif; color: #18181b; min-width: 200px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+              <span style="background: #f59e0b; color: #000; font-weight: 900; font-size: 11px; padding: 2px 6px; border-radius: 6px;">STOP ${stopNumber}</span>
+              <span style="font-size: 11px; color: #6b7280;">${stop.category || 'Pitstop'}</span>
+            </div>
+            <div style="font-weight: 700; font-size: 14px; color: #111827; margin-bottom: 4px;">${stop.name || `Stop ${stopNumber}`}</div>
+            ${stop.detourMinutes ? `<div style="font-size: 11px; color: #d97706;">+${stop.detourMinutes} min detour</div>` : ''}
+            <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">${Number(stop.latitude).toFixed(4)}°, ${Number(stop.longitude).toFixed(4)}°</div>
+          </div>
+        `;
+
+        const popup = new tt.Popup({ offset: 25, closeButton: false }).setHTML(popupHtml);
+        const marker = new tt.Marker({ element: el })
+          .setLngLat(stopLngLat)
+          .setPopup(popup)
+          .addTo(map);
+
+        markersRef.current.push(marker);
+        bounds.extend(stopLngLat);
+        hasPoints = true;
+      }
+    });
+
+    // D. Candidate Corridor Pitstops
+    pitstops.forEach((p) => {
+      const isAlreadyAdded = stops.some(
+        (s) =>
+          (s.placeId && s.placeId === p.placeId) ||
+          (Math.abs(s.latitude - p.latitude) < 0.001 &&
+            Math.abs(s.longitude - p.longitude) < 0.001)
+      );
+
+      if (!isAlreadyAdded && p.latitude && p.longitude) {
+        const pitLngLat = [Number(p.longitude), Number(p.latitude)];
+        const el = createTomTomMarkerElement('candidate', '', p.category);
+
+        const popupHtml = `
+          <div style="padding: 10px; font-family: sans-serif; color: #18181b; min-width: 190px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+              <span style="font-size: 11px; font-weight: 700; color: #d97706;">${p.category || 'Pitstop'}</span>
+              <span style="font-size: 11px; color: #059669; font-weight: 700;">★ ${p.rating || 4.5}</span>
+            </div>
+            <div style="font-weight: 700; font-size: 13px; color: #111827; margin-bottom: 4px;">${p.name}</div>
+            ${p.detourMinutes ? `<div style="font-size: 11px; color: #6b7280; margin-bottom: 6px;">+${p.detourMinutes} min detour</div>` : ''}
+          </div>
+        `;
+
+        const popup = new tt.Popup({ offset: 20, closeButton: false }).setHTML(popupHtml);
+        const marker = new tt.Marker({ element: el })
+          .setLngLat(pitLngLat)
+          .setPopup(popup)
+          .addTo(map);
+
+        el.addEventListener('click', () => {
+          if (onSelectPitstop) onSelectPitstop(p);
+        });
+
+        markersRef.current.push(marker);
+      }
+    });
+
+    // E. Draw Route Polyline Layer
+    const sourceId = 'tomtom-route-source';
+    const lineGlowId = 'tomtom-route-glow';
+    const lineMainId = 'tomtom-route-main';
+
+    if (routeCoordinates && routeCoordinates.length > 1) {
+      // TomTom GeoJSON coordinates expect [longitude, latitude]
+      const geojsonCoords = routeCoordinates.map(([lat, lon]) => [Number(lon), Number(lat)]);
+      
+      geojsonCoords.forEach((pt) => bounds.extend(pt));
+      hasPoints = true;
+
+      const geojsonData = {
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: geojsonCoords,
+        },
+      };
+
+      if (map.getSource(sourceId)) {
+        map.getSource(sourceId).setData(geojsonData);
+      } else {
+        map.addSource(sourceId, {
+          type: 'geojson',
+          data: geojsonData,
+        });
+
+        map.addLayer({
+          id: lineGlowId,
+          type: 'line',
+          source: sourceId,
+          layout: {
+            'line-cap': 'round',
+            'line-join': 'round',
+          },
+          paint: {
+            'line-color': '#f59e0b',
+            'line-width': 8,
+            'line-opacity': 0.35,
+          },
+        });
+
+        map.addLayer({
+          id: lineMainId,
+          type: 'line',
+          source: sourceId,
+          layout: {
+            'line-cap': 'round',
+            'line-join': 'round',
+          },
+          paint: {
+            'line-color': '#fbbf24',
+            'line-width': 4.5,
+            'line-opacity': 0.95,
+          },
+        });
+      }
+    } else {
+      // Remove layers if route cleared
+      if (map.getLayer(lineMainId)) map.removeLayer(lineMainId);
+      if (map.getLayer(lineGlowId)) map.removeLayer(lineGlowId);
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
+    }
+
+    // F. Fit Bounds smoothly
+    if (hasPoints && !bounds.isEmpty()) {
+      try {
+        map.fitBounds(bounds, {
+          padding: { top: 70, bottom: 70, left: 70, right: 70 },
+          maxZoom: 15,
+          duration: 1000,
+        });
+      } catch (fitErr) {
+        console.warn('fitBounds notice:', fitErr);
+      }
+    }
+  }, [mapLoaded, origin, destination, stops, pitstops, routeCoordinates, onSelectPitstop]);
+
+  // Center map on India
+  const handleResetToIndia = () => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.flyTo({
+        center: [78.9629, 20.5937],
+        zoom: 4.8,
+        duration: 1200,
+      });
+    }
+  };
 
   return (
-    <div className="relative w-full h-full min-h-[440px] rounded-3xl overflow-hidden border border-zinc-800 shadow-2xl bg-black">
-      <MapContainer
-        center={defaultCenter}
-        zoom={defaultZoom}
-        scrollWheelZoom={true}
-        className="w-full h-full min-h-[440px]"
-      >
-        {/* OpenStreetMap Tile Layer */}
-        <TileLayer attribution={tileAttribution} url={tileUrl} maxZoom={19} />
+    <div className="relative w-full h-full min-h-[480px] rounded-3xl overflow-hidden border border-zinc-800 bg-zinc-950 shadow-2xl flex flex-col">
+      {/* Map Container */}
+      <div ref={mapContainerRef} className="w-full h-full flex-1" />
 
-        {/* Interactive Click to Add Numbered Stop */}
-        <MapClickHandler onMapClick={onMapClick} />
-
-        {/* Fit Bounds Handler */}
-        {boundsPoints.length > 0 && <FitBoundsHandler bounds={boundsPoints} />}
-
-        {/* Polyline Route Layer */}
-        {routeCoordinates && routeCoordinates.length > 1 && (
-          <>
-            <Polyline
-              positions={routeCoordinates}
-              pathOptions={{
-                color: glowColor,
-                weight: isFlight ? 6 : 8,
-                opacity: 0.35,
-                lineCap: 'round',
-                lineJoin: 'round',
-                dashArray: isFlight ? '8, 12' : isTrain ? '6, 8' : undefined,
-              }}
-            />
-            <Polyline
-              positions={routeCoordinates}
-              pathOptions={{
-                color: primaryColor,
-                weight: isFlight ? 3 : 4,
-                opacity: 0.95,
-                lineCap: 'round',
-                lineJoin: 'round',
-                dashArray: isFlight ? '6, 10' : isTrain ? '8, 8' : undefined,
-              }}
-            />
-          </>
-        )}
-
-        {/* Start / Origin Marker */}
-        {origin && origin.latitude && origin.longitude && (
-          <Marker position={[Number(origin.latitude), Number(origin.longitude)]} icon={createStartIcon()}>
-            <Popup>
-              <div className="p-1 min-w-[180px]">
-                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 block mb-1">
-                  Origin (Start)
-                </span>
-                <p className="font-bold text-white text-sm leading-snug">{origin.name || 'Start Point'}</p>
-                <div className="text-[11px] text-zinc-400 mt-1 space-y-0.5">
-                  {origin.city && <div><span className="text-zinc-500">City:</span> {origin.city}</div>}
-                  {origin.state && <div><span className="text-zinc-500">State:</span> {origin.state}</div>}
-                </div>
-              </div>
-            </Popup>
-          </Marker>
-        )}
-
-        {/* Destination Marker */}
-        {destination && destination.latitude && destination.longitude && (
-          <Marker position={[Number(destination.latitude), Number(destination.longitude)]} icon={createDestIcon()}>
-            <Popup>
-              <div className="p-1 min-w-[180px]">
-                <span className="text-[10px] font-black uppercase tracking-wider text-rose-400 block mb-1">
-                  Destination (End)
-                </span>
-                <p className="font-bold text-white text-sm leading-snug">{destination.name || 'Destination'}</p>
-                <div className="text-[11px] text-zinc-400 mt-1 space-y-0.5">
-                  {destination.city && <div><span className="text-zinc-500">City:</span> {destination.city}</div>}
-                  {destination.state && <div><span className="text-zinc-500">State:</span> {destination.state}</div>}
-                </div>
-              </div>
-            </Popup>
-          </Marker>
-        )}
-
-        {/* Numbered Itinerary Stops Markers (Stop 1, Stop 2, Stop 3...) */}
-        {stops.map((stop, idx) => (
-          <Marker
-            key={`stop-marker-${stop.id || stop._id || idx}-${stop.latitude}-${stop.longitude}`}
-            position={[Number(stop.latitude), Number(stop.longitude)]}
-            icon={createNumberedStopIcon(idx + 1)}
-          >
-            <Popup>
-              <div className="p-1 min-w-[220px] max-w-[280px]">
-                <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-zinc-800">
-                  <span className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                    Stop {idx + 1}
-                  </span>
-                  {stop.category && (
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-300 border border-zinc-800">
-                      {stop.category}
-                    </span>
-                  )}
-                </div>
-
-                {stop.loadingAddress ? (
-                  <div className="flex items-center gap-2 py-2 text-xs text-amber-400">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Finding address...</span>
-                  </div>
-                ) : (
-                  <div className="text-xs space-y-1 text-zinc-200">
-                    {/* Name / Place */}
-                    <div className="font-bold text-white text-sm leading-snug mb-1.5">
-                      {stop.name || `Stop ${idx + 1}`}
-                    </div>
-
-                    {/* Complete available address fields */}
-                    {stop.houseNumber && (
-                      <div>
-                        <span className="text-zinc-400 font-medium">House No:</span>{' '}
-                        <span className="font-semibold text-zinc-100">{stop.houseNumber}</span>
-                      </div>
-                    )}
-                    {stop.street && (
-                      <div>
-                        <span className="text-zinc-400 font-medium">Street:</span>{' '}
-                        <span className="font-semibold text-zinc-100">{stop.street}</span>
-                      </div>
-                    )}
-                    {stop.area && (
-                      <div>
-                        <span className="text-zinc-400 font-medium">Area:</span>{' '}
-                        <span className="font-semibold text-zinc-100">{stop.area}</span>
-                      </div>
-                    )}
-                    {stop.city && (
-                      <div>
-                        <span className="text-zinc-400 font-medium">City:</span>{' '}
-                        <span className="font-semibold text-zinc-100">{stop.city}</span>
-                      </div>
-                    )}
-                    {stop.district && (
-                      <div>
-                        <span className="text-zinc-400 font-medium">District:</span>{' '}
-                        <span className="font-semibold text-zinc-100">{stop.district}</span>
-                      </div>
-                    )}
-                    {stop.state && (
-                      <div>
-                        <span className="text-zinc-400 font-medium">State:</span>{' '}
-                        <span className="font-semibold text-zinc-100">{stop.state}</span>
-                      </div>
-                    )}
-                    {stop.pin && (
-                      <div>
-                        <span className="text-zinc-400 font-medium">PIN:</span>{' '}
-                        <span className="font-semibold text-amber-400 font-mono">{stop.pin}</span>
-                      </div>
-                    )}
-                    {stop.country && (
-                      <div>
-                        <span className="text-zinc-400 font-medium">Country:</span>{' '}
-                        <span className="font-semibold text-zinc-100">{stop.country}</span>
-                      </div>
-                    )}
-
-                    <div className="text-[10px] text-zinc-500 font-mono pt-1">
-                      {Number(stop.latitude).toFixed(5)}°, {Number(stop.longitude).toFixed(5)}°
-                    </div>
-                  </div>
-                )}
-
-                {/* Actions inside popup */}
-                <div className="mt-2.5 pt-2 border-t border-zinc-800 flex items-center justify-between gap-2">
-                  <span className="text-[10px] text-zinc-400">
-                    Stay: {stop.stopDurationMinutes || 30}m
-                  </span>
-                  {onRemoveStop && (
-                    <button
-                      type="button"
-                      onClick={() => onRemoveStop(idx)}
-                      className="px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-[11px] font-bold flex items-center gap-1 transition-colors border border-rose-500/30 cursor-pointer"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      <span>Delete Stop</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-
-        {/* Candidate Pitstops Markers */}
-        {pitstops
-          .filter((p) => !stops.some((s) => s.name === p.name))
-          .map((pitstop, idx) => (
-            <Marker
-              key={`candidate-${pitstop._id || pitstop.name || 'stop'}-${idx}`}
-              position={[Number(pitstop.latitude), Number(pitstop.longitude)]}
-              icon={createCandidatePitstopIcon(pitstop.category)}
-            >
-              <Popup>
-                <div className="p-1 min-w-[200px]">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
-                      {pitstop.category}
-                    </span>
-                    <span className="text-xs font-bold text-amber-400">
-                      ★ {pitstop.rating || '4.5'}
-                    </span>
-                  </div>
-                  <h4 className="font-bold text-white text-xs leading-snug">{pitstop.name}</h4>
-                  <p className="text-[11px] text-zinc-400 my-1 line-clamp-2">{pitstop.description}</p>
-                  
-                  <div className="flex items-center justify-between text-[11px] text-zinc-400 my-1">
-                    <span>Detour: +{pitstop.detourMinutes || 10}m</span>
-                    <span>Stay: {pitstop.stopDurationMinutes || 30}m</span>
-                  </div>
-
-                  <div className="flex items-center gap-2 mt-2">
-                    {onSelectPitstop && (
-                      <button
-                        type="button"
-                        onClick={() => onSelectPitstop(pitstop)}
-                        className="flex-1 px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs shadow transition-colors cursor-pointer"
-                      >
-                        + Add Stop
-                      </button>
-                    )}
-                    {onOpenPlaceModal && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenPlaceModal(pitstop)}
-                        className="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs border border-zinc-800 cursor-pointer"
-                      >
-                        Details
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
-      </MapContainer>
-
-      {/* Map Hint / Instruction Pill */}
-      <div className="absolute top-4 left-4 z-20 bg-zinc-950/90 backdrop-blur-md border border-zinc-700 text-zinc-200 text-xs px-3.5 py-1.5 rounded-full shadow-xl pointer-events-none flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-        <span className="font-medium">Click anywhere on the map to add Stop 1, Stop 2, Stop 3...</span>
+      {/* Floating Control Buttons */}
+      <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
+        <button
+          onClick={handleResetToIndia}
+          className="flex items-center gap-2 px-3 py-2 bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/60 rounded-xl text-xs font-semibold backdrop-blur-md shadow-lg transition-all hover:scale-105 active:scale-95"
+          title="Reset View to India Overview"
+        >
+          <Compass className="w-4 h-4 text-amber-400" />
+          <span className="hidden sm:inline">India View</span>
+        </button>
       </div>
 
+      {/* API Key Notice Banner if not configured */}
+      {mapError && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20 max-w-md w-full px-4">
+          <div className="bg-amber-950/90 border border-amber-500/50 backdrop-blur-md text-amber-200 p-3 rounded-2xl shadow-xl flex items-start gap-2.5 text-xs">
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-amber-300">TomTom Maps Configuration</p>
+              <p className="mt-0.5 text-amber-200/80">{mapError}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clicked Map Location Action Card */}
+      {clickedLocation && (
+        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-20 w-[92%] max-w-md bg-zinc-950/95 border border-zinc-800 backdrop-blur-xl p-4 rounded-2xl shadow-2xl text-white animate-in slide-in-from-bottom-3 duration-200">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">
+                  Selected Map Location
+                </p>
+                <h4 className="text-sm font-bold text-white mt-0.5 line-clamp-1">
+                  {clickedLocation.name}
+                </h4>
+                <p className="text-xs text-zinc-400 line-clamp-2 mt-0.5">
+                  {clickedLocation.fullAddress}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setClickedLocation(null)}
+              className="p-1 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 text-xs"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-zinc-800/80">
+            {onSetAsOrigin && (
+              <button
+                onClick={() => {
+                  onSetAsOrigin({
+                    name: clickedLocation.name,
+                    latitude: clickedLocation.lat,
+                    longitude: clickedLocation.lng,
+                    address: clickedLocation.fullAddress,
+                  });
+                  setClickedLocation(null);
+                }}
+                className="px-2 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold transition-all text-center"
+              >
+                Set as Start
+              </button>
+            )}
+
+            {onAddAsStop && (
+              <button
+                onClick={() => {
+                  onAddAsStop({
+                    name: clickedLocation.name,
+                    latitude: clickedLocation.lat,
+                    longitude: clickedLocation.lng,
+                    category: 'Pitstop',
+                    address: clickedLocation.fullAddress,
+                  });
+                  setClickedLocation(null);
+                }}
+                className="px-2 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold transition-all text-center"
+              >
+                + Add Stop
+              </button>
+            )}
+
+            {onSetAsDestination && (
+              <button
+                onClick={() => {
+                  onSetAsDestination({
+                    name: clickedLocation.name,
+                    latitude: clickedLocation.lat,
+                    longitude: clickedLocation.lng,
+                    address: clickedLocation.fullAddress,
+                  });
+                  setClickedLocation(null);
+                }}
+                className="px-2 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold transition-all text-center"
+              >
+                Set as Dest
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Map Legend Overlay */}
-      <div className="absolute bottom-4 left-4 z-20 bg-zinc-950/90 backdrop-blur-md border border-zinc-800 rounded-2xl px-3.5 py-2 text-xs shadow-xl flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1.5 text-zinc-300">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-sm shadow-emerald-500/50"></span>
+      <div className="absolute bottom-4 right-4 z-10 hidden sm:flex items-center gap-3 px-3 py-1.5 bg-zinc-950/85 backdrop-blur-md border border-zinc-800/80 rounded-xl text-[11px] text-zinc-300 shadow-lg">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-sm"></span>
           <span>Start (A)</span>
         </div>
-        <div className="flex items-center gap-1.5 text-zinc-300">
-          <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block shadow-sm shadow-rose-500/50"></span>
-          <span>End (B)</span>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block shadow-sm"></span>
+          <span>Stops (1, 2...)</span>
         </div>
-        <div className="flex items-center gap-1.5 text-zinc-300">
-          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block shadow-sm shadow-amber-500/50"></span>
-          <span>Numbered Stops</span>
-        </div>
-        {pitstops.length > 0 && (
-          <div className="flex items-center gap-1.5 text-zinc-300">
-            <span className="w-2.5 h-2.5 rounded-full bg-orange-400 inline-block shadow-sm shadow-orange-400/50"></span>
-            <span>Pitstops</span>
-          </div>
-        )}
-        <div className="pl-2 border-l border-zinc-800 text-[10px] font-bold uppercase text-amber-400">
-          {vehicleType === 'flight'
-            ? '✈️ Flight Arc'
-            : vehicleType === 'train'
-            ? '🚆 Rail Line'
-            : vehicleType === 'bus'
-            ? '🚌 Bus Route'
-            : vehicleType === 'bike'
-            ? '🏍️ Bike Route'
-            : '🚗 Car Route'}
+        <div className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block shadow-sm"></span>
+          <span>Dest (B)</span>
         </div>
       </div>
     </div>
