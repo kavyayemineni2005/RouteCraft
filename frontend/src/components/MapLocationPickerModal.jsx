@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { MapPin, Check, X, Navigation, Loader2, Crosshair } from 'lucide-react';
-import { reverseGeocodeApi } from '../services/api';
+import { reverseGeocodeNominatim } from '../utils/reverseGeocodeNominatim';
 
-// Custom Pin Icon for interactive picking
+// Custom Pin Icon for interactive picking (Leaflet DivIcon)
 const createPickerIcon = (targetType) =>
   L.divIcon({
     className: 'custom-leaflet-icon',
@@ -14,7 +14,7 @@ const createPickerIcon = (targetType) =>
           targetType === 'start' ? 'bg-emerald-500/40' : 'bg-rose-500/40'
         } rounded-full animate-ping"></div>
         <div class="w-9 h-9 rounded-full ${
-          targetType === 'start' ? 'bg-emerald-600 border-emerald-400' : 'bg-rose-600 border-rose-400'
+          targetType === 'start' ? 'bg-emerald-600 border-emerald-300' : 'bg-rose-600 border-rose-300'
         } border-2 text-white flex items-center justify-center font-extrabold text-sm shadow-2xl">
           ${targetType === 'start' ? 'A' : 'B'}
         </div>
@@ -36,7 +36,7 @@ const MapEventsHandler = ({ onLocationSelected, position }) => {
 
   useEffect(() => {
     if (position && position[0] && position[1]) {
-      map.flyTo(position, map.getZoom(), { duration: 0.8 });
+      map.flyTo(position, map.getZoom(), { duration: 0.6 });
     }
   }, [position, map]);
 
@@ -52,22 +52,22 @@ const MapLocationPickerModal = ({
 }) => {
   const [selectedCoords, setSelectedCoords] = useState(
     initialLocation?.latitude && initialLocation?.longitude
-      ? [initialLocation.latitude, initialLocation.longitude]
-      : [17.385, 78.4867] // Default Hyderabad / Central India
+      ? [Number(initialLocation.latitude), Number(initialLocation.longitude)]
+      : [17.385, 78.4867] // Hyderabad / Central India
   );
   const [locationName, setLocationName] = useState(initialLocation?.name || 'Selected Map Location');
   const [shortName, setShortName] = useState(initialLocation?.name?.split(',')[0] || 'Selected Pin');
+  const [addressDetails, setAddressDetails] = useState(null);
   const [loadingAddress, setLoadingAddress] = useState(false);
   const [locatingGPS, setLocatingGPS] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       if (initialLocation?.latitude && initialLocation?.longitude) {
-        setSelectedCoords([initialLocation.latitude, initialLocation.longitude]);
+        setSelectedCoords([Number(initialLocation.latitude), Number(initialLocation.longitude)]);
         setLocationName(initialLocation.name || 'Selected Location');
         setShortName(initialLocation.name?.split(',')[0] || 'Selected Location');
       } else {
-        // Reverse geocode initial coords if name not present
         fetchAddress(selectedCoords[0], selectedCoords[1]);
       }
     }
@@ -76,11 +76,10 @@ const MapLocationPickerModal = ({
   const fetchAddress = async (lat, lon) => {
     setLoadingAddress(true);
     try {
-      const res = await reverseGeocodeApi(lat, lon);
-      if (res.data) {
-        setLocationName(res.data.name);
-        setShortName(res.data.shortName || res.data.name.split(',')[0]);
-      }
+      const res = await reverseGeocodeNominatim(lat, lon);
+      setLocationName(res.name || res.fullAddress);
+      setShortName(res.city || res.name?.split(',')[0] || 'Selected Pin');
+      setAddressDetails(res);
     } catch (err) {
       setLocationName(`Coordinates (${lat.toFixed(4)}°, ${lon.toFixed(4)}°)`);
       setShortName(`Pin (${lat.toFixed(2)}°, ${lon.toFixed(2)}°)`);
@@ -121,6 +120,10 @@ const MapLocationPickerModal = ({
       shortName: shortName,
       latitude: selectedCoords[0],
       longitude: selectedCoords[1],
+      city: addressDetails?.city || '',
+      state: addressDetails?.state || '',
+      street: addressDetails?.street || '',
+      pin: addressDetails?.pin || '',
     });
     onClose();
   };
@@ -156,7 +159,7 @@ const MapLocationPickerModal = ({
                 </span>
               </h3>
               <p className="text-xs text-zinc-400">
-                Click anywhere on the map or zoom into your desired street/spot to drop a pin.
+                Click anywhere on the OpenStreetMap or drag the pin to select precise coordinates.
               </p>
             </div>
           </div>
@@ -164,7 +167,7 @@ const MapLocationPickerModal = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -185,7 +188,7 @@ const MapLocationPickerModal = ({
                 Detected Place Address:
               </span>
               <p className="text-xs font-bold text-zinc-100 truncate max-w-xl">
-                {loadingAddress ? 'Fetching address details...' : locationName}
+                {loadingAddress ? 'Finding address...' : locationName}
               </p>
               <span className="text-[10px] text-zinc-400 font-mono">
                 Lat: {selectedCoords[0].toFixed(5)}°, Lon: {selectedCoords[1].toFixed(5)}°
@@ -197,7 +200,7 @@ const MapLocationPickerModal = ({
             type="button"
             onClick={handleUseCurrentGPS}
             disabled={locatingGPS}
-            className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0 border border-zinc-800"
+            className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0 border border-zinc-800 cursor-pointer"
             title="Use Device GPS"
           >
             {locatingGPS ? (
@@ -209,7 +212,7 @@ const MapLocationPickerModal = ({
           </button>
         </div>
 
-        {/* Interactive Map Picker Container */}
+        {/* Interactive Leaflet Map Container */}
         <div className="relative flex-1 min-h-[380px] w-full bg-black">
           <MapContainer
             center={selectedCoords}
@@ -218,16 +221,8 @@ const MapLocationPickerModal = ({
             className="w-full h-full min-h-[380px]"
           >
             <TileLayer
-              attribution={
-                import.meta.env.VITE_GEOAPIFY_API_KEY && import.meta.env.VITE_GEOAPIFY_API_KEY !== 'YOUR_KEY'
-                  ? 'Powered by <a href="https://www.geoapify.com/" target="_blank">Geoapify</a> | &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-              }
-              url={
-                import.meta.env.VITE_GEOAPIFY_API_KEY && import.meta.env.VITE_GEOAPIFY_API_KEY !== 'YOUR_KEY'
-                  ? `https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}.png?apiKey=${import.meta.env.VITE_GEOAPIFY_API_KEY}`
-                  : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-              }
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
               maxZoom={19}
             />
 
@@ -259,7 +254,7 @@ const MapLocationPickerModal = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 text-xs font-semibold transition-colors border border-zinc-800"
+            className="px-4 py-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 text-xs font-semibold transition-colors border border-zinc-800 cursor-pointer"
           >
             Cancel
           </button>
@@ -268,7 +263,7 @@ const MapLocationPickerModal = ({
             type="button"
             onClick={handleConfirm}
             disabled={loadingAddress}
-            className={`px-5 py-2.5 rounded-xl font-bold text-xs text-black shadow-lg flex items-center gap-2 transition-all ${
+            className={`px-5 py-2.5 rounded-xl font-bold text-xs text-black shadow-lg flex items-center gap-2 transition-all cursor-pointer ${
               isStart
                 ? 'bg-emerald-500 hover:bg-emerald-400 shadow-emerald-500/30'
                 : 'bg-rose-500 hover:bg-rose-400 shadow-rose-500/30 text-white'

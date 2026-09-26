@@ -55,6 +55,7 @@ import {
   discoverPitstopsApi,
   searchSuggestionsApi 
 } from '../services/api';
+import { reverseGeocodeNominatim } from '../utils/reverseGeocodeNominatim';
 import { useAuth } from '../context/AuthContext';
 
 import TimeBudget, { formatDuration } from '../components/TimeBudget';
@@ -463,6 +464,71 @@ const Planner = () => {
     const updated = stops.filter((_, i) => i !== index);
     setStops(updated);
     updateFullRouteWithStops(updated, vehicleType, travelersCount);
+  };
+
+  // Interactive click anywhere on map to add numbered Stop 1, Stop 2, Stop 3... with full Nominatim reverse geocode
+  const handleMapClick = async (lat, lng) => {
+    const tempId = `stop-click-${Date.now()}-${Math.random()}`;
+    const newStopPlaceholder = {
+      id: tempId,
+      name: 'Finding address...',
+      latitude: lat,
+      longitude: lng,
+      stopDurationMinutes: 30,
+      loadingAddress: true,
+      category: 'Itinerary Stop',
+    };
+
+    const nextStops = [...stops, newStopPlaceholder];
+    setStops(nextStops);
+    setActiveTab('itinerary');
+
+    try {
+      const geoResult = await reverseGeocodeNominatim(lat, lng);
+      setStops((prevStops) =>
+        prevStops.map((s) => {
+          if (s.id === tempId || (s.latitude === lat && s.longitude === lng && s.loadingAddress)) {
+            return {
+              ...s,
+              name: geoResult.name || `Stop ${prevStops.indexOf(s) + 1}`,
+              shortName: geoResult.name,
+              houseNumber: geoResult.houseNumber || '',
+              street: geoResult.street || '',
+              area: geoResult.area || '',
+              city: geoResult.city || '',
+              district: geoResult.district || '',
+              state: geoResult.state || '',
+              pin: geoResult.pin || '',
+              country: geoResult.country || 'India',
+              fullAddress: geoResult.fullAddress || '',
+              loadingAddress: false,
+            };
+          }
+          return s;
+        })
+      );
+
+      // Recalculate route if origin and destination are set
+      if (origin && destination) {
+        const resolvedStops = nextStops.map((s) =>
+          s.id === tempId ? { ...s, name: geoResult.name, loadingAddress: false } : s
+        );
+        updateFullRouteWithStops(resolvedStops, vehicleType, travelersCount);
+      }
+    } catch (err) {
+      console.warn('Map click reverse geocode notice:', err);
+      setStops((prevStops) =>
+        prevStops.map((s) =>
+          s.id === tempId
+            ? {
+                ...s,
+                name: `Address could not be found. Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+                loadingAddress: false,
+              }
+            : s
+        )
+      );
+    }
   };
 
   // Copy shareable link
@@ -1044,6 +1110,8 @@ const Planner = () => {
               routeCoordinates={routeCoordinates}
               onSelectPitstop={handleToggleAddStop}
               onOpenPlaceModal={(p) => setSelectedPlaceModal(p)}
+              onMapClick={handleMapClick}
+              onRemoveStop={handleRemoveStop}
             />
           </div>
         </div>
