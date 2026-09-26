@@ -1,6 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import tt from '@tomtom-international/web-sdk-maps';
-import '@tomtom-international/web-sdk-maps/dist/maps.css';
+import React, { useState, useEffect } from 'react';
+import { 
+  MapContainer, 
+  TileLayer, 
+  Marker, 
+  useMap, 
+  useMapEvents 
+} from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { 
   MapPin, 
   Check, 
@@ -12,12 +19,58 @@ import {
   Compass,
   AlertCircle 
 } from 'lucide-react';
-import { 
-  getTomTomApiKey, 
-  reverseGeocodeTomTom, 
-  searchTomTomPlaces,
-  createTomTomMarkerElement 
-} from '../services/tomtomService';
+import { reverseGeocodeNominatim } from '../utils/reverseGeocodeNominatim';
+import { searchSuggestionsApi } from '../services/api';
+
+// Fix default marker icon paths
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
+
+// Custom Pin Icon for interactive picking
+const createPickerIcon = (targetType, stopNumber = 1) => {
+  const isStart = targetType === 'start';
+  const isDest = targetType === 'dest';
+  const label = isStart ? 'A' : isDest ? 'B' : stopNumber;
+  const bg = isStart ? '#10b981' : isDest ? '#f43f5e' : '#f59e0b';
+  const text = isDest ? '#ffffff' : '#000000';
+
+  return L.divIcon({
+    className: 'custom-routecraft-marker',
+    html: `
+      <div style="position: relative; display: flex; align-items: center; justify-content: center;">
+        <div style="position: absolute; inset: -5px; background: ${bg}66; border-radius: 9999px; animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+        <div style="width: 36px; height: 36px; border-radius: 9999px; background: ${bg}; border: 2.5px solid #09090b; color: ${text}; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5);">
+          ${label}
+        </div>
+      </div>
+    `,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+  });
+};
+
+// Map Click Handler in Modal
+const ModalMapEvents = ({ onLocationSelected, position }) => {
+  const map = useMap();
+
+  useMapEvents({
+    click(e) {
+      onLocationSelected(e.latlng.lat, e.latlng.lng);
+    },
+  });
+
+  useEffect(() => {
+    if (position && position[0] && position[1]) {
+      map.flyTo(position, map.getZoom() < 8 ? 12 : map.getZoom(), { duration: 0.8 });
+    }
+  }, [position, map]);
+
+  return null;
+};
 
 const MapLocationPickerModal = ({
   isOpen,
@@ -27,10 +80,6 @@ const MapLocationPickerModal = ({
   initialLocation = null,
   onConfirmLocation,
 }) => {
-  const mapContainerRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-  const markerRef = useRef(null);
-
   const [selectedCoords, setSelectedCoords] = useState(
     initialLocation?.latitude && initialLocation?.longitude
       ? [Number(initialLocation.latitude), Number(initialLocation.longitude)]
@@ -46,83 +95,24 @@ const MapLocationPickerModal = ({
   const [searching, setSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
 
-  const apiKey = getTomTomApiKey();
-
-  // Initialize TomTom Map inside modal
   useEffect(() => {
-    if (!isOpen || !mapContainerRef.current) return;
-
-    const initialLat = initialLocation?.latitude ? Number(initialLocation.latitude) : 20.5937;
-    const initialLng = initialLocation?.longitude ? Number(initialLocation.longitude) : 78.9629;
-    const initialZoom = initialLocation?.latitude ? 12 : 5;
-
-    const keyToUse = apiKey || 'YOUR_TOMTOM_API_KEY';
-
-    try {
-      const map = tt.map({
-        key: keyToUse,
-        container: mapContainerRef.current,
-        center: [initialLng, initialLat],
-        zoom: initialZoom,
-        dragPan: true,
-        stylesConfig: {
-          style: 'main',
-          layer: 'basic',
-        },
-      });
-
-      map.addControl(new tt.NavigationControl(), 'top-right');
-
-      map.on('load', () => {
-        map.resize();
-
-        // Place initial marker
-        const markerType = targetType === 'stop' ? 'stop' : targetType;
-        const label = targetType === 'stop' ? stopNumber : targetType === 'start' ? 'A' : 'B';
-        const el = createTomTomMarkerElement(markerType, label);
-
-        const marker = new tt.Marker({ element: el })
-          .setLngLat([initialLng, initialLat])
-          .addTo(map);
-
-        markerRef.current = marker;
-
-        if (initialLocation?.latitude && initialLocation?.longitude) {
-          fetchAddress(initialLat, initialLng);
-        }
-      });
-
-      // Handle map click
-      map.on('click', (e) => {
-        const { lng, lat } = e.lngLat;
-        setSelectedCoords([lat, lng]);
-
-        if (markerRef.current) {
-          markerRef.current.setLngLat([lng, lat]);
-        }
-
-        fetchAddress(lat, lng);
-      });
-
-      mapInstanceRef.current = map;
-    } catch (err) {
-      console.warn('[MapPicker Init Error]:', err);
-    }
-
-    return () => {
-      if (mapInstanceRef.current) {
-        try {
-          mapInstanceRef.current.remove();
-        } catch (e) {}
-        mapInstanceRef.current = null;
+    if (isOpen) {
+      if (initialLocation?.latitude && initialLocation?.longitude) {
+        const lat = Number(initialLocation.latitude);
+        const lon = Number(initialLocation.longitude);
+        setSelectedCoords([lat, lon]);
+        setLocationName(initialLocation.name || 'Selected Location');
+        fetchAddress(lat, lon);
+      } else {
+        fetchAddress(selectedCoords[0], selectedCoords[1]);
       }
-    };
-  }, [isOpen]);
+    }
+  }, [isOpen, initialLocation]);
 
   const fetchAddress = async (lat, lon) => {
     setLoadingAddress(true);
     try {
-      const res = await reverseGeocodeTomTom(lat, lon);
+      const res = await reverseGeocodeNominatim(lat, lon);
       setLocationName(res.name || res.fullAddress);
       setAddressDetails(res);
     } catch (err) {
@@ -132,7 +122,12 @@ const MapLocationPickerModal = ({
     }
   };
 
-  // Search places in modal
+  const handleMapClick = (lat, lon) => {
+    setSelectedCoords([lat, lon]);
+    fetchAddress(lat, lon);
+  };
+
+  // Search input change
   const handleSearchChange = async (e) => {
     const val = e.target.value;
     setSearchQuery(val);
@@ -141,10 +136,10 @@ const MapLocationPickerModal = ({
       setSearching(true);
       setShowDropdown(true);
       try {
-        const results = await searchTomTomPlaces(val);
-        setSuggestions(results);
+        const res = await searchSuggestionsApi(val.trim());
+        setSuggestions(res.data || []);
       } catch (err) {
-        console.warn('Search notice:', err);
+        setSuggestions([]);
       } finally {
         setSearching(false);
       }
@@ -157,21 +152,11 @@ const MapLocationPickerModal = ({
   const handleSelectSuggestion = (place) => {
     setSearchQuery(place.name);
     setShowDropdown(false);
-    setSelectedCoords([place.latitude, place.longitude]);
-    setLocationName(place.fullName || place.name);
-    setAddressDetails(place);
-
-    if (mapInstanceRef.current) {
-      mapInstanceRef.current.flyTo({
-        center: [place.longitude, place.latitude],
-        zoom: 14,
-        duration: 1000,
-      });
-
-      if (markerRef.current) {
-        markerRef.current.setLngLat([place.longitude, place.latitude]);
-      }
-    }
+    const lat = Number(place.latitude);
+    const lon = Number(place.longitude);
+    setSelectedCoords([lat, lon]);
+    setLocationName(place.name);
+    fetchAddress(lat, lon);
   };
 
   // Use Browser GPS
@@ -188,19 +173,6 @@ const MapLocationPickerModal = ({
         const lon = pos.coords.longitude;
         setSelectedCoords([lat, lon]);
         setLocatingGPS(false);
-
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.flyTo({
-            center: [lon, lat],
-            zoom: 15,
-            duration: 1200,
-          });
-
-          if (markerRef.current) {
-            markerRef.current.setLngLat([lon, lat]);
-          }
-        }
-
         fetchAddress(lat, lon);
       },
       (err) => {
@@ -232,10 +204,10 @@ const MapLocationPickerModal = ({
 
   const badgeColor =
     targetType === 'start'
-      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
       : targetType === 'dest'
-      ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-      : 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+      ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+      : 'bg-amber-500/15 text-amber-400 border-amber-500/30';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
@@ -260,7 +232,7 @@ const MapLocationPickerModal = ({
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent hover:border-zinc-800 transition-all"
+            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent hover:border-zinc-800 transition-all cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -276,7 +248,7 @@ const MapLocationPickerModal = ({
               value={searchQuery}
               onChange={handleSearchChange}
               onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+              className="w-full bg-black border border-zinc-800 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
             />
             {searching && (
               <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin absolute right-3 top-1/2 -translate-y-1/2" />
@@ -284,16 +256,16 @@ const MapLocationPickerModal = ({
 
             {showDropdown && suggestions.length > 0 && (
               <div className="absolute left-0 right-0 top-full mt-1 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl max-h-48 overflow-y-auto z-40">
-                {suggestions.map((s) => (
+                {suggestions.map((s, idx) => (
                   <button
-                    key={s.id}
+                    key={`modal-sug-${idx}`}
                     onClick={() => handleSelectSuggestion(s)}
-                    className="w-full text-left px-3.5 py-2.5 hover:bg-zinc-900 border-b border-zinc-900/60 last:border-none flex items-start gap-2 text-xs transition-colors"
+                    className="w-full text-left px-3.5 py-2.5 hover:bg-zinc-900 border-b border-zinc-900/60 last:border-none flex items-start gap-2 text-xs transition-colors cursor-pointer"
                   >
                     <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
                     <div>
                       <span className="font-semibold text-white block">{s.name}</span>
-                      <span className="text-[11px] text-zinc-400 line-clamp-1">{s.fullName}</span>
+                      <span className="text-[11px] text-zinc-400 line-clamp-1">{s.formattedAddress || s.name}</span>
                     </div>
                   </button>
                 ))}
@@ -304,7 +276,7 @@ const MapLocationPickerModal = ({
           <button
             onClick={handleUseCurrentGPS}
             disabled={locatingGPS}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 transition-all shrink-0"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 transition-all shrink-0 cursor-pointer"
           >
             {locatingGPS ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
@@ -316,8 +288,30 @@ const MapLocationPickerModal = ({
         </div>
 
         {/* Map View */}
-        <div className="flex-1 relative bg-zinc-950">
-          <div ref={mapContainerRef} className="w-full h-full" />
+        <div className="flex-1 relative bg-zinc-900">
+          <MapContainer
+            center={selectedCoords}
+            zoom={initialLocation?.latitude ? 12 : 5}
+            scrollWheelZoom={true}
+            style={{ height: '100%', width: '100%' }}
+            className="w-full h-full z-10"
+          >
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              maxZoom={19}
+            />
+
+            <ModalMapEvents
+              onLocationSelected={handleMapClick}
+              position={selectedCoords}
+            />
+
+            <Marker
+              position={selectedCoords}
+              icon={createPickerIcon(targetType, stopNumber)}
+            />
+          </MapContainer>
         </div>
 
         {/* Location Details Footer & Confirmation */}
@@ -347,13 +341,13 @@ const MapLocationPickerModal = ({
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold border border-zinc-800 transition-all"
+              className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold border border-zinc-800 transition-all cursor-pointer"
             >
               Cancel
             </button>
             <button
               onClick={handleConfirm}
-              className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold shadow-lg shadow-amber-500/25 transition-all flex items-center gap-1.5"
+              className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold shadow-lg shadow-amber-500/25 transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Check className="w-4 h-4" />
               <span>Confirm Location</span>
