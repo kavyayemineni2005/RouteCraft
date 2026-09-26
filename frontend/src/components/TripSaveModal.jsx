@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { X, BookmarkCheck, Check, Sparkles, AlertCircle, IndianRupee } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, BookmarkCheck, Check, Sparkles, AlertCircle, LogIn, ExternalLink } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { createTripApi, updateTripApi } from '../services/api';
 import { formatDuration } from './TimeBudget';
 import { formatCurrency } from './FinancialBudget';
+import { useAuth } from '../context/AuthContext';
 
 const TripSaveModal = ({
   isOpen,
@@ -10,23 +12,73 @@ const TripSaveModal = ({
   tripData,
   onSavedSuccess,
 }) => {
-  const [title, setTitle] = useState(
-    tripData?.title ||
-    `${tripData?.startLocation?.name?.split(',')[0] || 'Origin'} to ${
-      tripData?.endLocation?.name?.split(',')[0] || 'Destination'
-    } Trip`
-  );
-  const [notes, setNotes] = useState(tripData?.notes || '');
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+
+  const [title, setTitle] = useState('');
+  const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSaved, setIsSaved] = useState(false);
+
+  // Synchronize modal state whenever opened
+  useEffect(() => {
+    if (isOpen && tripData) {
+      const startName =
+        tripData.startLocation?.name?.split(',')[0] ||
+        tripData.stops?.[0]?.name?.split(',')[0] ||
+        'Origin';
+      const destName =
+        tripData.endLocation?.name?.split(',')[0] ||
+        tripData.stops?.[tripData.stops?.length - 1]?.name?.split(',')[0] ||
+        'Destination';
+
+      const defaultTitle =
+        tripData.title ||
+        (startName === destName ? `${startName} Micro-Trip` : `${startName} to ${destName} Trip`);
+
+      setTitle(defaultTitle);
+      setNotes(tripData.notes || '');
+      setErrorMsg('');
+      setIsSaved(false);
+    }
+  }, [isOpen, tripData]);
 
   if (!isOpen) return null;
 
   const handleSave = async (e) => {
     e.preventDefault();
+
     if (!title.trim()) {
       setErrorMsg('Please enter a title for your trip.');
+      return;
+    }
+
+    // Resolve start and end locations with fallback to stops if origin/dest not set
+    const resolvedStart =
+      tripData.startLocation?.name
+        ? tripData.startLocation
+        : tripData.stops && tripData.stops.length > 0
+        ? {
+            name: tripData.stops[0].name || 'Start Point',
+            latitude: Number(tripData.stops[0].latitude) || 0,
+            longitude: Number(tripData.stops[0].longitude) || 0,
+          }
+        : null;
+
+    const resolvedEnd =
+      tripData.endLocation?.name
+        ? tripData.endLocation
+        : tripData.stops && tripData.stops.length > 0
+        ? {
+            name: tripData.stops[tripData.stops.length - 1].name || 'Destination',
+            latitude: Number(tripData.stops[tripData.stops.length - 1].latitude) || 0,
+            longitude: Number(tripData.stops[tripData.stops.length - 1].longitude) || 0,
+          }
+        : null;
+
+    if (!resolvedStart || !resolvedEnd) {
+      setErrorMsg('Please calculate a route or click on the map to add at least one stop before saving.');
       return;
     }
 
@@ -36,18 +88,18 @@ const TripSaveModal = ({
     try {
       const payload = {
         title: title.trim(),
-        startLocation: tripData.startLocation,
-        endLocation: tripData.endLocation,
-        start: tripData.startLocation,
-        destination: tripData.endLocation,
+        startLocation: resolvedStart,
+        endLocation: resolvedEnd,
+        start: resolvedStart,
+        destination: resolvedEnd,
         stops: tripData.stops || [],
-        totalDurationMinutes: tripData.totalDurationMinutes || 0,
-        travelTime: tripData.totalDurationMinutes || 0,
-        availableTimeBudgetMinutes: tripData.availableTimeBudgetMinutes || 480,
-        availableTime: tripData.availableTimeBudgetMinutes || 480,
-        totalDistanceKm: tripData.totalDistanceKm || 0,
-        distance: tripData.totalDistanceKm || 0,
-        totalTripTime: tripData.totalTripTime || tripData.totalDurationMinutes || 0,
+        totalDurationMinutes: Number(tripData.totalDurationMinutes) || 0,
+        travelTime: Number(tripData.totalDurationMinutes) || 0,
+        availableTimeBudgetMinutes: Number(tripData.availableTimeBudgetMinutes) || 480,
+        availableTime: Number(tripData.availableTimeBudgetMinutes) || 480,
+        totalDistanceKm: Number(tripData.totalDistanceKm) || 0,
+        distance: Number(tripData.totalDistanceKm) || 0,
+        totalTripTime: Number(tripData.totalTripTime) || Number(tripData.totalDurationMinutes) || 0,
         vehicleType: tripData.vehicleType || 'car',
         travelersCount: Number(tripData.travelersCount) || 1,
         totalBudget: Number(tripData.totalBudget) || 5000,
@@ -57,7 +109,10 @@ const TripSaveModal = ({
         activityCost: Number(tripData.activityCost) || 0,
         otherCost: Number(tripData.otherCost) || 0,
         estimatedTotal: Number(tripData.estimatedTotal) || 0,
-        remainingBudget: Number(tripData.remainingBudget) !== undefined ? Number(tripData.remainingBudget) : (Number(tripData.totalBudget || 5000) - Number(tripData.estimatedTotal || 0)),
+        remainingBudget:
+          Number(tripData.remainingBudget) !== undefined
+            ? Number(tripData.remainingBudget)
+            : Number(tripData.totalBudget || 5000) - Number(tripData.estimatedTotal || 0),
         routeCoordinates: tripData.routeCoordinates || [],
         notes: notes.trim(),
       };
@@ -77,9 +132,10 @@ const TripSaveModal = ({
       setTimeout(() => {
         setIsSaved(false);
         onClose();
-      }, 1500);
+      }, 1200);
     } catch (err) {
-      setErrorMsg(err.message || 'Failed to save trip.');
+      console.error('[TripSaveModal Error]:', err);
+      setErrorMsg(err.message || 'Failed to save trip. Please ensure you are logged in.');
     } finally {
       setSaving(false);
     }
@@ -116,13 +172,14 @@ const TripSaveModal = ({
             </div>
             <div>
               <h3 className="text-lg font-bold text-white">Save Trip Plan</h3>
-              <p className="text-xs text-zinc-400">Save route, schedule & budget to your profile</p>
+              <p className="text-xs text-zinc-400">Save route, schedule & budget to your account</p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -130,16 +187,30 @@ const TripSaveModal = ({
 
         <form onSubmit={handleSave} className="p-6 space-y-4">
           {errorMsg && (
-            <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs rounded-xl flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{errorMsg}</span>
+            <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs rounded-2xl flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+              {!isAuthenticated && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    navigate('/login', { state: { from: '/planner' } });
+                  }}
+                  className="px-2.5 py-1 bg-rose-500 text-black font-bold text-[11px] rounded-lg shrink-0 cursor-pointer"
+                >
+                  Sign In
+                </button>
+              )}
             </div>
           )}
 
           {isSaved && (
-            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs rounded-xl flex items-center gap-2">
+            <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs rounded-2xl flex items-center gap-2">
               <Check className="w-4 h-4 shrink-0" />
-              <span>Trip saved successfully!</span>
+              <span className="font-bold">Trip saved successfully! Viewing in your trips...</span>
             </div>
           )}
 
@@ -161,15 +232,15 @@ const TripSaveModal = ({
                 <strong className="text-zinc-100 font-bold">{formatDuration(tripData.totalDurationMinutes)}</strong>
               </div>
               <div>
-                <span className="text-zinc-400 block mb-0.5">Travelers</span>
-                <strong className="text-amber-400 font-bold">{tripData.travelersCount || 1} person</strong>
+                <span className="text-zinc-400 block mb-0.5">Stops</span>
+                <strong className="text-amber-400 font-bold">{tripData.stops?.length || 0} stop{tripData.stops?.length === 1 ? '' : 's'}</strong>
               </div>
             </div>
 
             {/* Financial Budget Quick Strip */}
             <div className="pt-2 border-t border-zinc-800 grid grid-cols-3 gap-2 text-center text-xs">
               <div>
-                <span className="text-zinc-400 block mb-0.5 text-[10px]">User Budget</span>
+                <span className="text-zinc-400 block mb-0.5 text-[10px]">Budget</span>
                 <strong className="text-zinc-200 font-bold">{formatCurrency(tripData.totalBudget || 5000)}</strong>
               </div>
               <div>
@@ -199,7 +270,7 @@ const TripSaveModal = ({
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Weekend Drive with Sunset Viewpoint"
+              placeholder="e.g. Weekend Drive with Scenic Stops"
               className="w-full bg-black border border-zinc-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
             />
           </div>
@@ -223,14 +294,14 @@ const TripSaveModal = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold transition-colors border border-zinc-800"
+              className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold transition-colors border border-zinc-800 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving || isSaved}
-              className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs shadow-lg shadow-emerald-500/30 flex items-center gap-1.5 disabled:opacity-50 transition-all"
+              className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs shadow-lg shadow-emerald-500/30 flex items-center gap-1.5 disabled:opacity-50 transition-all cursor-pointer"
             >
               {saving ? (
                 <>

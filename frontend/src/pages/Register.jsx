@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Compass, Mail, Lock, User, UserPlus, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Register = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { register } = useAuth();
 
   const [name, setName] = useState('');
@@ -13,10 +14,15 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  const redirectPath = typeof location.state?.from === 'string'
+    ? location.state.from
+    : location.state?.from?.pathname || '/dashboard';
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (password.length < 6) {
       setErrorMsg('Password must be at least 6 characters.');
+      return;
     }
 
     setErrorMsg('');
@@ -24,7 +30,7 @@ const Register = () => {
 
     try {
       await register(name, email, password);
-      navigate('/dashboard', { replace: true });
+      navigate(redirectPath, { replace: true });
     } catch (err) {
       setErrorMsg(err.message || 'Registration failed. Email might already be registered.');
     } finally {

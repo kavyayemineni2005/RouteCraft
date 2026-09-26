@@ -13,7 +13,9 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const redirectPath = location.state?.from?.pathname || '/dashboard';
+  const redirectPath = typeof location.state?.from === 'string'
+    ? location.state.from
+    : location.state?.from?.pathname || '/dashboard';
 
   const handleSubmit = async (e) => {
     e.preventDefault();

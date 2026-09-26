@@ -35,20 +35,42 @@ const createTrip = async (req, res) => {
     } = req.body;
 
     const resolvedTitle = title || req.body.tripName || req.body.name || 'My Road Trip';
-    const resolvedStart = start || startLocation;
-    const resolvedDest = destination || endLocation;
-    const resolvedBudget = availableTime || availableTimeBudgetMinutes || 480;
-    const resolvedDistance = distance || totalDistanceKm || 0;
-    const resolvedTravelTime = travelTime || totalDurationMinutes || 0;
-    const resolvedVehicle = ['car', 'bike', 'bus', 'train', 'flight'].includes(vehicleType) ? vehicleType : 'car';
-    const resolvedTravelers = Number(req.body.travelersCount) >= 1 ? Number(req.body.travelersCount) : 1;
-    const resolvedTotalBudget = Number(totalBudget) >= 0 ? Number(totalBudget) : 5000;
-    const resolvedEstimatedTotal = Number(estimatedTotal) >= 0 ? Number(estimatedTotal) : 0;
-    const resolvedRemaining = Number(remainingBudget) !== undefined ? Number(remainingBudget) : (resolvedTotalBudget - resolvedEstimatedTotal);
+    let resolvedStart = start || startLocation;
+    let resolvedDest = destination || endLocation;
 
-    if (!resolvedStart || !resolvedDest) {
-      return res.status(400).json({ message: 'Start location and destination are required.' });
+    // Fallback to stops if start/dest are not explicitly provided
+    if ((!resolvedStart || !resolvedStart.name) && stops && stops.length > 0) {
+      resolvedStart = {
+        name: stops[0].name || 'Start Point',
+        latitude: stops[0].latitude || 0,
+        longitude: stops[0].longitude || 0,
+      };
     }
+
+    if ((!resolvedDest || !resolvedDest.name) && stops && stops.length > 0) {
+      const lastStop = stops[stops.length - 1];
+      resolvedDest = {
+        name: lastStop.name || 'Destination',
+        latitude: lastStop.latitude || 0,
+        longitude: lastStop.longitude || 0,
+      };
+    }
+
+    if (!resolvedStart || !resolvedDest || !resolvedStart.name || !resolvedDest.name) {
+      return res.status(400).json({ message: 'Start location and destination or itinerary stops are required to save a trip.' });
+    }
+
+    const resolvedBudget = !isNaN(Number(availableTime || availableTimeBudgetMinutes)) ? Number(availableTime || availableTimeBudgetMinutes) : 480;
+    const resolvedDistance = !isNaN(Number(distance || totalDistanceKm)) ? Number(distance || totalDistanceKm) : 0;
+    const resolvedTravelTime = !isNaN(Number(travelTime || totalDurationMinutes)) ? Number(travelTime || totalDurationMinutes) : 0;
+    const resolvedVehicle = ['car', 'bike', 'bus', 'train', 'flight'].includes(vehicleType) ? vehicleType : 'car';
+    const resolvedTravelers = !isNaN(Number(req.body.travelersCount)) && Number(req.body.travelersCount) >= 1 ? Number(req.body.travelersCount) : 1;
+    const resolvedTotalBudget = !isNaN(Number(totalBudget)) ? Number(totalBudget) : 5000;
+    const resolvedEstimatedTotal = !isNaN(Number(estimatedTotal)) ? Number(estimatedTotal) : 0;
+    const resolvedRemaining =
+      remainingBudget !== undefined && remainingBudget !== null && !isNaN(Number(remainingBudget))
+        ? Number(remainingBudget)
+        : resolvedTotalBudget - resolvedEstimatedTotal;
 
     const trip = await Trip.create({
       userId: req.user._id,

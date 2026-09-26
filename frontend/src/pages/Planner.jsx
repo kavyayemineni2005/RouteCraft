@@ -156,9 +156,29 @@ const Planner = () => {
     })
   );
 
-  // Initial Calculation on mount if params are provided
+  // Initial Calculation on mount if params are provided or pending trip exists
   useEffect(() => {
-    if (startQuery && destQuery) {
+    const pendingJson = sessionStorage.getItem('routecraft_pending_trip');
+    if (pendingJson) {
+      try {
+        const pending = JSON.parse(pendingJson);
+        if (pending.startQuery) setStartQuery(pending.startQuery);
+        if (pending.destQuery) setDestQuery(pending.destQuery);
+        if (pending.origin) setOrigin(pending.origin);
+        if (pending.destination) setDestination(pending.destination);
+        if (pending.stops && pending.stops.length > 0) setStops(pending.stops);
+        if (pending.vehicleType) setVehicleType(pending.vehicleType);
+        if (pending.travelersCount) setTravelersCount(pending.travelersCount);
+        if (pending.totalBudget) setTotalBudget(pending.totalBudget);
+        if (pending.availableBudget) setAvailableBudget(pending.availableBudget);
+
+        if (pending.startQuery && pending.destQuery) {
+          handleCalculateRoute(pending.startQuery, pending.destQuery, pending.vehicleType, pending.travelersCount);
+        }
+      } catch (e) {
+        console.warn('Could not restore pending trip:', e);
+      }
+    } else if (startQuery && destQuery) {
       handleCalculateRoute(startQuery, destQuery, vehicleType, travelersCount);
     }
   }, []);
@@ -1084,7 +1104,26 @@ const Planner = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    if (!origin && !destination && stops.length === 0) {
+                      setErrorMessage('Please calculate a route or click the map to add stops before saving your trip.');
+                      return;
+                    }
                     if (!isAuthenticated) {
+                      // Preserve current planner state in session storage so user doesn't lose work
+                      sessionStorage.setItem(
+                        'routecraft_pending_trip',
+                        JSON.stringify({
+                          startQuery,
+                          destQuery,
+                          origin,
+                          destination,
+                          stops,
+                          vehicleType,
+                          travelersCount,
+                          totalBudget,
+                          availableBudget,
+                        })
+                      );
                       navigate('/login', { state: { from: '/planner' } });
                     } else {
                       setIsSaveModalOpen(true);
@@ -1144,8 +1183,8 @@ const Planner = () => {
           isOpen={isSaveModalOpen}
           onClose={() => setIsSaveModalOpen(false)}
           tripData={{
-            startLocation: origin,
-            endLocation: destination,
+            startLocation: origin || (stops.length > 0 ? { name: stops[0].name, latitude: Number(stops[0].latitude), longitude: Number(stops[0].longitude) } : null),
+            endLocation: destination || (stops.length > 0 ? { name: stops[stops.length - 1].name, latitude: Number(stops[stops.length - 1].latitude), longitude: Number(stops[stops.length - 1].longitude) } : null),
             stops: stops,
             totalDurationMinutes: drivingDuration,
             availableTimeBudgetMinutes: availableBudget,
@@ -1164,7 +1203,8 @@ const Planner = () => {
             routeCoordinates: routeCoordinates,
           }}
           onSavedSuccess={(savedTrip) => {
-            // Success feedback
+            sessionStorage.removeItem('routecraft_pending_trip');
+            navigate('/trips');
           }}
         />
       )}
