@@ -13,6 +13,9 @@ const app = express();
 
 // Allowed Origins for CORS across Production & Development
 const allowedOrigins = [
+  'https://route-craft-kavya.vercel.app',
+  'https://routecraft-kavya.vercel.app',
+  'https://kavya-routecraft.vercel.app',
   'https://route-craft-kappa.vercel.app',
   'https://routecraft-jdi6.onrender.com',
   'http://localhost:5173',
