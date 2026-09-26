@@ -11,10 +11,70 @@ connectDB();
 
 const app = express();
 
+// Allowed Origins for CORS across Production & Development
+const allowedOrigins = [
+  'https://route-craft-kappa.vercel.app',
+  'https://routecraft-jdi6.onrender.com',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:3000',
+  'http://localhost:5000',
+  process.env.FRONTEND_URL,
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow non-browser requests (Postman, curl, server-to-server)
+    if (!origin) return callback(null, true);
+
+    // Allow exact matches, any Vercel domain (*.vercel.app), Render, or localhost
+    if (
+      allowedOrigins.includes(origin) ||
+      /\.vercel\.app$/.test(origin) ||
+      /\.onrender\.com$/.test(origin) ||
+      /^http:\/\/localhost(:\d+)?$/.test(origin) ||
+      /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)
+    ) {
+      return callback(null, true);
+    }
+
+    // Default: allow origin to prevent cross-domain blocking
+    return callback(null, true);
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers',
+  ],
+  exposedHeaders: ['Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
 // Middlewares with high payload capacity for detailed route coordinates
-app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Root Health & Deployment Verification Check
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'RouteCraft Backend API Server is active and healthy',
+    app: 'RouteCraft API',
+    frontend: 'https://route-craft-kappa.vercel.app',
+    backend: 'https://routecraft-jdi6.onrender.com',
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // API Health Check
 app.get('/api/health', (req, res) => {

@@ -1,23 +1,63 @@
 import axios from 'axios';
 
+/**
+ * Resolves the appropriate API base URL dynamically:
+ * 1. Checks VITE_API_URL or VITE_BACKEND_URL environment variable if set.
+ * 2. If running on Vercel deployment (*.vercel.app), targets the live Render backend.
+ * 3. Falls back to relative '/api' for localhost Vite proxy.
+ */
+const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    const url = import.meta.env.VITE_API_URL.trim().replace(/\/+$/, '');
+    return url.endsWith('/api') ? url : `${url}/api`;
+  }
+  if (import.meta.env.VITE_BACKEND_URL) {
+    const url = import.meta.env.VITE_BACKEND_URL.trim().replace(/\/+$/, '');
+    return url.endsWith('/api') ? url : `${url}/api`;
+  }
+
+  // Automatic detection for production Vercel deployment
+  if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+    return 'https://routecraft-jdi6.onrender.com/api';
+  }
+
+  return '/api';
+};
+
 const API = axios.create({
-  baseURL: '/api',
-  timeout: 15000,
+  baseURL: getApiBaseUrl(),
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  },
 });
 
 // Automatically inject JWT token into authorization header if available
-API.interceptors.request.use((config) => {
-  const token = localStorage.getItem('routecraft_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+API.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('routecraft_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
-// Response interceptor for friendly error formatting
+// Response interceptor for friendly error formatting and auth handling
 API.interceptors.response.use(
   (response) => response,
   (error) => {
+    // If token expired or invalid (HTTP 401 on protected route), clear invalid token
+    if (error.response?.status === 401 && error.config?.url !== '/auth/login' && error.config?.url !== '/auth/register') {
+      const storedToken = localStorage.getItem('routecraft_token');
+      if (storedToken) {
+        console.warn('[API Interceptor] Auth session expired. Clearing local session.');
+        localStorage.removeItem('routecraft_token');
+      }
+    }
+
     const message =
       error.response?.data?.message ||
       error.message ||
